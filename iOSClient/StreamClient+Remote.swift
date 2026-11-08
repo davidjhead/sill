@@ -1,7 +1,9 @@
 import Foundation
 import Network
 import CryptoKit
+#if canImport(UIKit)
 import UIKit
+#endif
 import StreamProtocol
 
 // Remote access on the device (docs/remote-access-plan.md §7): pairing, saved Macs, remote dials,
@@ -143,7 +145,7 @@ enum RemoteCopy {
 
 extension StreamClient {
     /// "iPhone" or "iPad", for copy about this device.
-    static var deviceWord: String { UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad" }
+    static var deviceWord: String { ClientPlatform.deviceWord }
 
     /// DEBUG builds keep 127.0.0.1 for the simulator's tests against a host on this Mac.
     static var keepsLoopback: Bool {
@@ -244,12 +246,12 @@ extension StreamClient {
         if !savedMacsSeeded, let dir {
             for stale in plan.delete { try? FileManager.default.removeItem(at: dir.appendingPathComponent(stale)) }
         }
-        var shown: [String: UIImage] = [:]
+        var shown: [String: PlatformImage] = [:]
         if let dir {
             for macID in plan.show {
                 guard let name = ConnectionList.previewFileName(for: macID),
                       let data = try? Data(contentsOf: dir.appendingPathComponent(name)),
-                      let image = UIImage(data: data) else { continue }
+                      let image = PlatformImage(data: data) else { continue }
                 shown[macID] = image
             }
         }
@@ -265,11 +267,11 @@ extension StreamClient {
     /// up) and its JPEG is written. The file has complete protection: unreadable while the device is
     /// locked. Sill reads it only at launch and when tiles come back, and writes it only for a session
     /// that ended in a window in front, a second at most later, so all happen while the device is unlocked.
-    func savePreview(_ image: UIImage, for macID: String) {
+    func savePreview(_ image: PlatformImage, for macID: String) {
         guard let name = ConnectionList.previewFileName(for: macID) else { return }
         macPreviews[macID] = image
         guard !savedMacsSeeded, let dir = Self.previewsDirectory,
-              let data = image.jpegData(compressionQuality: 0.72) else { return }
+              let data = image.sillJPEGData(quality: 0.72) else { return }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                  attributes: [.protectionKey: FileProtectionType.complete])
         let file = dir.appendingPathComponent(name)
@@ -684,6 +686,21 @@ extension StreamClient {
                          remoteAllowed: remoteAllowed,
                          rememberedDirect: bonjour.map { directWirelessMacs.contains($0) } ?? false,
                          afterQuit: afterQuit, openKey: openKey)
+    }
+
+    /// A saved Mac reconnected to as if its session had just ended (the automatic reconnect, §7.4):
+    /// its network row once listed, else its saved addresses, for `redialWindow`. Sill Viewer at
+    /// launch, for the Mac it was connected to when it last quit. Not a Mac that removed this device
+    /// or has a new key (they wait for a tap). False when nothing is tried.
+    @discardableResult
+    func reconnectAtLaunch(_ macID: String) -> Bool {
+        guard !connected, connection == nil, reconnect == nil, let saved = savedMac(macID),
+              saved.revoked != true, saved.newKey != true else { return false }
+        let name = displayName(macID)
+        reconnect = lostReconnect(session: nil, saved: saved, name: name, remoteAllowed: true)
+        status = "Reconnecting to \(name)…"
+        reconnectIfListed()
+        return true
     }
 
     /// The automatic reconnect's look, at every browser change, path change and due time
@@ -1113,8 +1130,8 @@ extension StreamClient {
             queue.async {
                 guard !finished else { return }
                 let proof = PairingProof.deviceProof(key: key, deviceFingerprint: fpDevice, macFingerprint: fpMac)
-                let request = PairRequest(method: method, proof: Base64URL.encode(proof), name: UIDevice.current.name,
-                                          model: ClientStatsReporter.hardwareIdentifier)
+                let request = PairRequest(method: method, proof: Base64URL.encode(proof), name: ClientPlatform.deviceName,
+                                          model: ClientPlatform.hardwareIdentifier)
                 let message = StreamMessage(kind: .pairRequest, timestamp: Date().timeIntervalSince1970, isKeyframe: false,
                                             payload: Wire.encode(request))
                 c.send(content: message.serialized(), completion: .contentProcessed { _ in })

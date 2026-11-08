@@ -3284,8 +3284,8 @@ package final class StreamCoordinator {
         case .pointer(let action, _, _):
             switch action {
             case .move: return .pointerMove
-            case .leftDown, .rightDown: return .buttonDown
-            case .leftUp, .rightUp: return .buttonUp
+            case .leftDown, .rightDown, .middleDown: return .buttonDown
+            case .leftUp, .rightUp, .middleUp: return .buttonUp
             }
         case .scroll, .scrollGesture: return .scroll
         case .key(_, let down, _): return down ? .keyDown : .keyUp

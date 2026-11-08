@@ -218,6 +218,8 @@ final class InputInjector {
         var clicks: Int64 = 1
 
         switch action {
+        case .middleDown, .middleUp:
+            return    // not advertised by this host yet (`WindowList.middleButton` stays nil): never sent
         case .move:
             // A move with a button held is a drag; sending .mouseMoved instead would break
             // text selection and window dragging.

@@ -175,7 +175,7 @@ final class HostClipboard {
         let got = ClipboardPolicy.hostReceives(payload, arrivals: arrivals[id] ?? [], now: ProcessInfo.processInfo.systemUptime)
         arrivals[id] = got.kept
         switch got.ask {
-        case .subscribe:
+        case .subscribe, .image:    // images: a later generation (the host takes none yet, `takesImages` stays false)
             subscribe(connection, who: who)
         case .set(let text):
             subscribe(connection, who: who)
