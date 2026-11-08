@@ -274,8 +274,8 @@ check(!json(quiet).contains("audio") && Wire.decode(ClientStats.self, from: Wire
       "a device that played no sound sends neither")
 // Kind 43.
 check(StreamMessageKind.audio.rawValue == 43 && StreamMessageKind(rawValue: 43) == .audio, "kind 43 is audio")
-check(StreamMessageKind(rawValue: 29) == nil && StreamMessageKind(rawValue: 42) == nil && StreamMessageKind(rawValue: 44) == .keyframeRequest,
-      "kinds 29 and 42 (#66's) are not this build's, and 44 is the keyframe request (32, #78's, is the clipboard: below)")
+check(StreamMessageKind(rawValue: 29) == .sideStreams && StreamMessageKind(rawValue: 42) == .rebuildDesk && StreamMessageKind(rawValue: 44) == .keyframeRequest,
+      "kinds 29 and 42 are the Mac client's (#66), and 44 is the keyframe request (32, #78's, is the clipboard: below)")
 
 // Kind 32, the clipboard (docs/clipboard-plan.md), and the window list's `clipboard`: additive both
 // ways. A host says it in its list, a device sends kind 32 only then, and an older peer skips the kind.
@@ -286,7 +286,7 @@ check(!json(takes).contains("clipboard") && !json(list).contains("clipboard"), "
 check(decodedOld != nil && decodedOld?.clipboard == nil, "an older host's list decodes, clipboard nil")
 check(Wire.decode(WindowList.self, from: Wire.encode(shares)).map { $0.clipboard == 1 && $0.gestures == 1 } == true, "clipboard round-trips beside gestures")
 check(StreamMessageKind.clipboard.rawValue == 32 && StreamMessageKind(rawValue: 32) == .clipboard, "kind 32 is the clipboard")
-check([29, 30, 31, 33].allSatisfy { StreamMessageKind(rawValue: $0) == nil }, "29, 30, 31 and 33 not this build's")
+check([29, 30, 31].allSatisfy { StreamMessageKind(rawValue: $0) != nil } && StreamMessageKind(rawValue: 33) == nil, "29, 30 and 31 are the side streams, 33 (#66's sound, replaced by 43) is not this build's")
 let clip = Clipboard(text: "Hello")
 check(json(clip) == #"{"text":"Hello"}"# && json(Clipboard()) == "{}" && json(Clipboard(stop: true)) == #"{"stop":true}"#, "kind 32's keys: \(json(clip))")
 check(Wire.decode(Clipboard.self, from: Data(#"{"text":"a","image":"AQID","later":1}"#.utf8)) == Clipboard(text: "a", image: Data([1, 2, 3])),
