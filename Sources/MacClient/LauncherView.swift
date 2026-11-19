@@ -271,7 +271,8 @@ struct LauncherView: View {
         Button(action: toggleSidebar) {
             Image(systemName: "sidebar.left").font(.system(size: 14))
                 .frame(width: 32, height: 32)
-                .background(Glass(cornerRadius: 16, fill: sidebarHidden ? 0.14 : 0, stroke: sidebarHidden ? 0.2 : 0))
+                .background(Circle().fill(.white.opacity(sidebarHidden ? 0.14 : 0))
+                    .overlay(Circle().strokeBorder(.white.opacity(sidebarHidden ? 0.2 : 0))))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
