@@ -24,7 +24,7 @@ struct LauncherPage {
     var settings = Settings()
 }
 
-/// What the launcher's buttons do. Each opening one closes the launcher first (Launcher).
+/// What the launcher's buttons do. The launcher's window stays open after a choice (Launcher).
 struct LauncherActions {
     var open: (LauncherModel.Choice) -> Void = { _ in }
     var close: () -> Void = {}
@@ -35,9 +35,9 @@ struct LauncherActions {
     var disconnect: () -> Void = {}
 }
 
-/// The launcher's overlay, as the "Launchpad overlay" design has it: the other Mac and a search at the
-/// top, its Desktops and open windows in a row, every app in a grid (a dot under the running ones), and
-/// its settings as chips at the bottom. Drawn over Launcher's blurred, dimmed backdrop.
+/// The launcher's page, from the "Launchpad overlay" design, in a window of its own: a search at the top
+/// (the other Mac's name is the window's title), its Desktops and open windows in a row, every app in a
+/// grid (a dot under the running ones), and its settings as chips at the bottom.
 struct LauncherView: View {
     let page: LauncherPage
     let actions: LauncherActions
@@ -48,9 +48,7 @@ struct LauncherView: View {
 
     var body: some View {
         let model = self.model
-        ZStack {
-            // A click on the backdrop, outside every tile, closes it, as Launchpad's does.
-            Color.black.opacity(0.001).onTapGesture { actions.close() }
+        VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 24) {
                 header
                 if model.isEmpty {
@@ -63,11 +61,12 @@ struct LauncherView: View {
                 settingsChips
             }
             .frame(maxWidth: 1120)
-            .padding(.horizontal, 48)
-            .padding(.top, 40)
-            .padding(.bottom, 32)
+            .padding(.horizontal, 28)
+            .padding(.top, 20)
+            .padding(.bottom, 20)
         }
-        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.background)
         .onAppear { searchFocused = true }
         .onExitCommand { actions.close() }
     }
@@ -75,34 +74,21 @@ struct LauncherView: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(spacing: 16) {
-            HStack(spacing: 8) {
-                Circle().fill(Color.green).frame(width: 8, height: 8)
-                Text(page.macName).fontWeight(.semibold)
-                Text(page.status).foregroundStyle(.white.opacity(0.7))
-            }
-            .font(.system(size: 13))
-            .frame(width: 280, alignment: .leading)
-            Spacer(minLength: 0)
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.white.opacity(0.7))
-                TextField("Search apps, windows and displays", text: $query)
-                    .textFieldStyle(.plain)
-                    .focused($searchFocused)
-                    .onSubmit { if let first = model.firstChoice { actions.open(first) } }
-                    .accessibilityLabel("Search \(page.macName)")
-            }
-            .font(.system(size: 14))
-            .padding(.horizontal, 12)
-            .frame(width: 380, height: 36)
-            .background(RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.14)))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.2)))
-            Spacer(minLength: 0)
-            Text("esc to close")
-                .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.6))
-                .frame(width: 280, alignment: .trailing)
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Search apps, windows and displays", text: $query)
+                .textFieldStyle(.plain)
+                .focused($searchFocused)
+                .onSubmit { if let first = model.firstChoice { actions.open(first) } }
+                .accessibilityLabel("Search \(page.macName)")
         }
+        .font(.system(size: 14))
+        .padding(.horizontal, 12)
+        .frame(maxWidth: 420)
+        .frame(height: 34)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.primary.opacity(0.12)))
+        .frame(maxWidth: .infinity)
     }
 
     private var emptyState: some View {
@@ -112,7 +98,7 @@ struct LauncherView: View {
                 .font(.system(size: 15, weight: .medium))
             if !query.isEmpty {
                 Text("Apps, window titles and display names are searched.")
-                    .font(.system(size: 13)).foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 13)).foregroundStyle(.secondary)
             }
             Spacer()
         }
@@ -147,10 +133,10 @@ struct LauncherView: View {
         Button { actions.open(.desktop(d.source)) } label: {
             VStack(spacing: 6) {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(red: 0.18, green: 0.2, blue: 0.25))
+                    .fill(Color.primary.opacity(0.07))
                     .overlay(Image(systemName: "menubar.dock.rectangle").font(.system(size: 26, weight: .light))
-                        .foregroundStyle(.white.opacity(0.75)))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(d.isOpen ? Color.accentColor : .white.opacity(0.2),
+                        .foregroundStyle(.secondary))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(d.isOpen ? Color.accentColor : Color.primary.opacity(0.2),
                                                                              lineWidth: d.isOpen ? 2 : 1))
                     .frame(width: 150, height: 92)
                 caption(d.name, d.detail, width: 150)
@@ -164,7 +150,7 @@ struct LauncherView: View {
         Button { actions.open(.window(w.id)) } label: {
             VStack(spacing: 6) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.92))
+                    RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.07))
                     if let picture = page.thumbnails[w.id] {
                         Image(nsImage: picture).resizable().scaledToFill()
                     } else {
@@ -192,7 +178,7 @@ struct LauncherView: View {
                             VStack(spacing: 7) {
                                 appIcon(a.bundleID, name: a.name, size: 64)
                                 Text(a.name).font(.system(size: 12)).lineLimit(1).truncationMode(.tail)
-                                Circle().fill(.white.opacity(a.running ? 0.85 : 0)).frame(width: 4, height: 4)
+                                Circle().fill(Color.primary.opacity(a.running ? 0.85 : 0)).frame(width: 4, height: 4)
                             }
                             .frame(maxWidth: .infinity)
                         }
@@ -211,7 +197,7 @@ struct LauncherView: View {
         } else {
             RoundedRectangle(cornerRadius: size * 0.22)
                 .fill(Color(white: 0.45))
-                .overlay(Text(String(name.prefix(1))).font(.system(size: size * 0.42, weight: .semibold)))
+                .overlay(Text(String(name.prefix(1))).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(.white))
                 .frame(width: size * 0.82, height: size * 0.82)
                 .frame(width: size, height: size)
         }
@@ -254,15 +240,15 @@ struct LauncherView: View {
 
     private func chip(_ label: String, _ value: String) -> some View {
         HStack(spacing: 8) {
-            Text(label).foregroundStyle(.white.opacity(0.65))
+            Text(label).foregroundStyle(.secondary)
             Text(value).fontWeight(.medium)
         }
         .font(.system(size: 12))
-        .foregroundStyle(.white)
+        .foregroundStyle(.primary)
         .padding(.horizontal, 14)
         .frame(height: 34)
-        .background(Capsule().fill(.white.opacity(0.1)))
-        .overlay(Capsule().strokeBorder(.white.opacity(0.18)))
+        .background(Capsule().fill(Color.primary.opacity(0.05)))
+        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12)))
         .contentShape(Capsule())
     }
 
@@ -274,7 +260,7 @@ struct LauncherView: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.65))
+            Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
             content()
         }
     }
@@ -283,7 +269,7 @@ struct LauncherView: View {
         VStack(spacing: 1) {
             Text(title).font(.system(size: 12)).lineLimit(1).truncationMode(.tail)
             if let detail {
-                Text(detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.65)).lineLimit(1).truncationMode(.tail)
+                Text(detail).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
             }
         }
         .frame(width: width)
@@ -302,7 +288,7 @@ private struct LauncherTileStyle: ButtonStyle {
         var body: some View {
             configuration.label
                 .padding(6)
-                .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(hovering ? 0.1 : 0)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(hovering ? 0.1 : 0)))
                 .opacity(configuration.isPressed ? 0.6 : 1)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
                 .onHover { hovering = $0 }

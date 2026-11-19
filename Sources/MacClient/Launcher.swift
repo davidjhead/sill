@@ -3,71 +3,56 @@ import SwiftUI
 import StreamProtocol
 
 /// The launcher: a click on Sill Viewer's Dock icon (or opening it again from Finder) while a session is
-/// up covers this Mac's screen with everything the other Mac offers to open (LauncherView): its Desktops,
-/// its open windows, every app and its settings, as Launchpad covers it with this Mac's apps.
+/// up brings forward a window of everything the other Mac offers to open (LauncherView): its Desktops,
+/// its open windows, every app and its settings.
 ///
-/// One borderless panel over the screen under the pointer, above the menu bar, on a blurred and dimmed
-/// backdrop. It closes on Escape, a click outside the tiles, a choice (which then opens, as the status
-/// item's menu opens it), the app going to the background, or the session's end. Main thread.
+/// An ordinary window, titled with the other Mac's name and the link's state, resizable, remembering its
+/// frame. It stays open after a choice (the stream's window opens in front of it), and closes with its
+/// close button, Command-W, Escape, Disconnect or the session's end. Main thread.
 final class Launcher: NSObject, NSWindowDelegate {
     private unowned let app: AppDelegate
-    private var panel: LauncherPanel?
+    private var window: NSWindow?
 
     init(app: AppDelegate) { self.app = app }
 
-    var isShown: Bool { panel?.isVisible == true }
-
-    func toggle() { isShown ? hide() : show() }
+    var isShown: Bool { window?.isVisible == true }
 
     func show() {
-        guard app.client.connected, !isShown else { return }
-        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-        guard let frame = screen?.frame else { return }
-        let panel = LauncherPanel(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        panel.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 1)
-        panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .transient, .ignoresCycle]
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.isReleasedWhenClosed = false
-        panel.animationBehavior = .none
-        panel.delegate = self
-        panel.onCancel = { [weak self] in self?.hide() }
-
-        let backdrop = NSVisualEffectView(frame: NSRect(origin: .zero, size: frame.size))
-        backdrop.material = .fullScreenUI
-        backdrop.blendingMode = .behindWindow
-        backdrop.state = .active
-        backdrop.appearance = NSAppearance(named: .darkAqua)
-        backdrop.autoresizingMask = [.width, .height]
-        let dim = NSView(frame: backdrop.bounds)
-        dim.wantsLayer = true
-        dim.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.35).cgColor
-        dim.autoresizingMask = [.width, .height]
-        backdrop.addSubview(dim)
-        let content = NSHostingView(rootView: LiveLauncher(client: app.client, launcher: self))
-        content.frame = backdrop.bounds
-        content.autoresizingMask = [.width, .height]
-        backdrop.addSubview(content)
-        panel.contentView = backdrop
-
-        self.panel = panel
-        panel.alphaValue = 0
+        guard app.client.connected else { return }
+        if let window {
+            NSApp.activate()
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        let window = LauncherWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 660),
+                                    styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                                    backing: .buffered, defer: false)
+        window.title = app.client.macName
+        window.contentMinSize = NSSize(width: 600, height: 440)
+        window.isReleasedWhenClosed = false
+        window.tabbingMode = .disallowed
+        window.delegate = self
+        window.onCancel = { [weak self] in self?.hide() }
+        window.contentView = NSHostingView(rootView: LiveLauncher(client: app.client, launcher: self))
+        window.center()
+        window.setFrameAutosaveName("SillLauncher")   // after center(): a saved frame wins
+        self.window = window
         NSApp.activate()
-        panel.makeKeyAndOrderFront(nil)
-        NSAnimationContext.runAnimationGroup { $0.duration = 0.15; panel.animator().alphaValue = 1 }
+        window.makeKeyAndOrderFront(nil)
     }
 
-    func hide() {
-        guard let panel else { return }
-        self.panel = nil
-        panel.delegate = nil
-        NSAnimationContext.runAnimationGroup({ $0.duration = 0.12; panel.animator().alphaValue = 0 },
-                                             completionHandler: { panel.orderOut(nil) })
+    func hide() { window?.close() }
+
+    func windowWillClose(_ notification: Notification) {
+        window?.delegate = nil
+        window = nil   // a fresh one next time, its search empty
     }
 
-    /// Another app in front, or a window of this one taking the keyboard: the launcher goes, as Launchpad does.
-    func windowDidResignKey(_ notification: Notification) { hide() }
+    /// The title bar follows the session: the other Mac's name, and the link's state under it.
+    fileprivate func setTitle(_ title: String, subtitle: String) {
+        window?.title = title
+        window?.subtitle = subtitle
+    }
 
     // MARK: What its buttons do (as the status item's menu does them)
 
@@ -75,7 +60,6 @@ final class Launcher: NSObject, NSWindowDelegate {
         LauncherActions(
             open: { [weak self] choice in
                 guard let self else { return }
-                self.hide()
                 switch choice {
                 case .desktop(let source): self.app.windows.open(source)
                 case .window(let id): self.app.windows.open(.window(id))
@@ -129,14 +113,14 @@ private struct LiveLauncher: View {
         actions.toggleSound = { sound(); ownSwitches += 1 }
         actions.toggleCapture = { capture(); ownSwitches += 1 }
         return LauncherView(page: page, actions: actions)
+            .onAppear { launcher.setTitle(page.macName, subtitle: page.status) }
+            .onChange(of: page.macName + "\n" + page.status) { launcher.setTitle(page.macName, subtitle: page.status) }
             .onChange(of: client.connected) { _, connected in if !connected { launcher.hide() } }
     }
 }
 
-/// A borderless panel that takes the keyboard (for the search) and closes on Escape.
-private final class LauncherPanel: NSPanel {
+/// The launcher's window: Escape closes it, as Command-W does.
+private final class LauncherWindow: NSWindow {
     var onCancel: (() -> Void)?
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
     override func cancelOperation(_ sender: Any?) { onCancel?() }
 }

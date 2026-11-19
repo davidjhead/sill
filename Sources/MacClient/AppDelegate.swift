@@ -62,12 +62,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
-    /// A click on the Dock icon, or opening the app again from Finder: while a session is up, the launcher
-    /// (everything the other Mac offers to open), whatever windows are open, and a second click puts it
-    /// away; with none, the connect window when no window shows.
+    /// A click on the Dock icon, or opening the app again from Finder: while a session is up, the launcher's
+    /// window (everything the other Mac offers to open) comes forward, whatever windows are open; with
+    /// none, the connect window when no window shows.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if client.connected {
-            launcher.toggle()
+            launcher.show()
             return false   // the launcher stands for the windows AppKit would otherwise bring forward
         }
         if !flag { showConnectWindow() }
