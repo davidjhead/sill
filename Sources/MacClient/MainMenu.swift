@@ -47,7 +47,8 @@ final class MainMenu: NSObject {
     private func appMenu() -> NSMenuItem {
         let name = "Sill Viewer"
         let menu = NSMenu(title: name)
-        menu.addItem(withTitle: "About \(name)", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let about = menu.addItem(withTitle: "About \(name)", action: #selector(AboutPanel.show), keyEquivalent: "")
+        about.target = AboutPanel.shared
         menu.addItem(.separator())
         menu.addItem(withTitle: "Hide \(name)", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let others = menu.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
@@ -76,5 +77,18 @@ final class MainMenu: NSObject {
         let item = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
         item.submenu = menu
         return item
+    }
+}
+
+/// The About panel, its version naming the commit the build came from (make-client-app.sh writes it
+/// into Info.plist as SillCommit): "0.6.3 (1707, 49587a3)", so a test build can be told apart from the
+/// next and rolled back to (Scripts/viewer-snapshot.sh).
+final class AboutPanel: NSObject {
+    static let shared = AboutPanel()
+    @objc func show() {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let build = info["CFBundleVersion"] as? String ?? "?"
+        let commit = (info["SillCommit"] as? String).map { ", \($0)" } ?? ""
+        NSApp.orderFrontStandardAboutPanel(options: [.version: build + commit])
     }
 }

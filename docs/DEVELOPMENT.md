@@ -591,6 +591,7 @@ docs/mac-client-plan.md has the design, the wire, Sill's desk, sound, files and 
 
 ```
 Scripts/make-client-app.sh --open          # .build/Sill Viewer.app (release; --debug for the test arguments; --notarize)
+Scripts/viewer-snapshot.sh [--push]        # a test build to roll back to: zip in ~/SillViewerBuilds, tag viewer-<version>-b<build>
 ```
 
 - **Connect** from the menu bar icon: a Mac on the same network is listed, and a tap asks to pair

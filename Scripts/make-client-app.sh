@@ -50,6 +50,10 @@ cat > "$helper/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(git rev-list --count HEAD 2>/dev/null || echo 1)" "$app/Contents/Info.plist"
+# The commit it was built from (About shows it), "+changes" when the tree had uncommitted edits.
+commit=$(git rev-parse --short=7 HEAD 2>/dev/null || echo unknown)
+git diff --quiet HEAD -- Sources iOSClient Packaging Package.swift 2>/dev/null || commit="$commit+changes"
+/usr/libexec/PlistBuddy -c "Add :SillCommit string $commit" "$app/Contents/Info.plist"
 # The icon: design/ViewerIcon.svg, as make-app.sh does Sill's (its comment says why actool, not iconutil).
 icon_out="$PWD/.build/viewer-icon"   # absolute: actool resolves relative paths in its helper's directory
 if [ ! -f "$icon_out/compiled/Assets.car" ] || [ design/ViewerIcon.svg -nt "$icon_out/compiled/Assets.car" ] \
