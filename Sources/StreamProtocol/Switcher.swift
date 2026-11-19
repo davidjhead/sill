@@ -4,7 +4,7 @@ import Foundation
 public enum StreamSource: Codable, Hashable {
     case none
     case window(UInt32)   // CGWindowID, stable for the life of the window
-    case desktop          // the Mac's main display
+    case desktop          // one of the Mac's displays: the main one unless a device stepped to another (kind 47)
 }
 
 /// One on-screen Mac window, as the client sees it. WindowList order is stable: first seen first.
@@ -69,6 +69,20 @@ public struct WindowList: Codable {
     /// sends them as keys only to a host that says so (the device's KeyTyping). Set after the initializer,
     /// whose parameters stay as they were: `list.keyRepeat = KeyRepeat.generation`.
     public var keyRepeat: Int?
+    /// How many stops the Desktop has (DesktopDisplays: the Mac's displays, never Sill's own nor macOS's
+    /// stand-in, one per mirror set), 2 or more, and which of them it shows, or comes back to while a
+    /// window streams, counting from 1 in the cycle's order: 1 is the main display, then each display to
+    /// its right as they sit, wrapping round (issue #91, docs/virtual-desktop-plan.md §1). A device's
+    /// Desktop button then reads "Desktop 2", with a dot per stop while the Desktop streams, and a tap
+    /// then sends kind 47 for the next. Left out with one stop, while the Mac is locked or another user
+    /// is on its screen, and by every host before this, to which a device sends no kind 47. Set after the
+    /// initializer, as `keyRepeat`.
+    public var desktopDisplays: Int?
+    public var desktopDisplay: Int?
+    /// Each stop's name in that order (NSScreen's, "DELL U2723QE"; empty when it has none), for
+    /// VoiceOver's value ("Display 2 of 3, DELL U2723QE") and, later, a list to choose from (PR #296's).
+    /// With `desktopDisplays` only.
+    public var desktopDisplayNames: [String]?
     /// This Mac shows nothing of itself to devices (the host's LockPolicy, docs/locked-mac-plan.md): its
     /// screen is locked, or another user, the login window or nobody is on its console. True, with no
     /// windows and no `clipboard` in the list, while the host streams a placeholder (a black frame) and
@@ -80,6 +94,13 @@ public struct WindowList: Codable {
     /// login window, or none), left out while its own screen is locked. A device words its cover by it:
     /// nothing typed reaches the Mac then (`LockedMac.Why`).
     public var offConsole: Bool?
+    /// With `locked` and `offConsole`: true while the Mac shows this session anyway, its user's switch Show
+    /// this account while another user is on the screen on (docs/off-console-plan.md, issue #316): the list
+    /// has its windows, the Mac streams this session's own desktop or a window picked, to look at, and nothing
+    /// a device sends acts on it. Sent only to a device whose hello said it shows it (`Hello.offConsoleView`),
+    /// left out otherwise and by every host before. A device keeps the picture, covers nothing and says what it
+    /// is (`LockedMac.viewLine`).
+    public var offConsoleView: Bool?
     /// True: this host sends the sound of the apps a device shows (kind 33) when it asks. Nil before 2026-10-12.
     public var audio: Bool?
     /// True: this host takes files dropped on its windows (kinds 34 and 35). Nil before 2026-10-12.
@@ -102,7 +123,9 @@ public struct WindowList: Codable {
     /// is (kind 40); nil from a host before 2026-10-12, whose Desktop is its main display.
     public var displays: [DisplayInfo]?
     /// The one the Desktop shows now.
-    public var desktopDisplay: UInt32?
+    /// (#66's key. Main's `desktopDisplay`, an index into `desktopDisplays` (#91), kept its name; the two features
+    /// are one to reconcile when #66's host side comes in, docs/mac-client-prd.md.)
+    public var pickedDisplay: UInt32?
     /// True: this host makes its hidden displays again on a device's word (kind 42). Nil before
     /// 2026-10-14, to which a device sends none.
     public var rebuildDesk: Bool?
@@ -110,7 +133,7 @@ public struct WindowList: Codable {
     public init(macName: String, windows: [WindowInfo], active: StreamSource, launchID: String? = nil,
                 hostVersion: String? = nil, protocol: Int? = nil, gestures: Int? = nil, middleButton: Bool? = nil,
                 sideStreams: Int? = nil, clipboard: Int? = nil, audio: Bool? = nil, fileDrop: Bool? = nil,
-                liveDrag: Bool? = nil, dockMenu: Bool? = nil, displays: [DisplayInfo]? = nil, desktopDisplay: UInt32? = nil,
+                liveDrag: Bool? = nil, dockMenu: Bool? = nil, displays: [DisplayInfo]? = nil, pickedDisplay: UInt32? = nil,
                 windowInput: Bool? = nil, badges: [String: String]? = nil, rebuildDesk: Bool? = nil) {
         self.macName = macName; self.windows = windows; self.active = active; self.launchID = launchID
         self.hostVersion = hostVersion; self.protocol = `protocol`; self.gestures = gestures
@@ -118,7 +141,7 @@ public struct WindowList: Codable {
         self.clipboard = clipboard
         self.audio = audio; self.fileDrop = fileDrop; self.liveDrag = liveDrag
         self.dockMenu = dockMenu; self.windowInput = windowInput; self.badges = badges
-        self.displays = displays; self.desktopDisplay = desktopDisplay; self.rebuildDesk = rebuildDesk
+        self.displays = displays; self.pickedDisplay = pickedDisplay; self.rebuildDesk = rebuildDesk
     }
 }
 
@@ -159,6 +182,37 @@ public enum LockedMac {
 
     /// How long "Unlocking…" waits for the picture at most before it goes anyway.
     public static let unlockingTimeout: Double = 4
+
+    // MARK: The off-console view (docs/off-console-plan.md)
+
+    /// What this device says in its hello (`Hello.offConsoleView`): it shows a Mac's off-console view.
+    public static let viewGeneration = 1
+
+    /// Whether `list` is the off-console view's: this session's own desktop and windows, to look at.
+    public static func view(_ list: WindowList) -> Bool {
+        list.locked == true && list.offConsole == true && list.offConsoleView == true
+    }
+
+    /// Whether the stream is covered (and its picture cleared once, as it comes): only for a Mac off console
+    /// that shows nothing of itself; the off-console view's picture is live.
+    public static func covers(_ why: Why?, view: Bool) -> Bool { why == .otherUser && !view }
+
+    /// The cover after a window list, the off-console view's included: none for it (its picture is live),
+    /// else as `shade(_:list:)`.
+    public static func shade(_ was: Shade?, list why: Why?, view: Bool) -> Shade? {
+        if view, why == .otherUser { return nil }
+        return shade(was, list: why)
+    }
+
+    /// The line over the stream while the off-console view lasts (where the link's line goes), three lines at
+    /// most; VoiceOver hears it once as it comes.
+    public static let viewLine = "Your account’s own desktop, not this Mac’s screen. Taps and keys reach it once your account is back on the screen."
+
+    /// The Settings panel's header and the Apps drawer, above its open apps, in the off-console view.
+    public static let viewPanelLine = "Another user is on this Mac’s screen. You’re seeing your account’s own desktop and windows, not the screen. Taps, keys and opening apps wait until your account is back on it."
+
+    /// What VoiceOver hears after a dimmed Aa's name and value in the off-console view (no window is sized).
+    public static let viewTextScaleHint = "Available once your account is back on this Mac’s screen."
 
     /// The Apps drawer's and the Settings panel's line, where the Mac's windows would be. Another user's
     /// is the cover's title and line together, in Noah's words (2026-11-02), with no Mac's name in them.

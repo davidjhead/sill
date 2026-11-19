@@ -15,6 +15,7 @@ final class AudioOutput {
     func setStreamFPS(_ fps: Int) {}
     func rtt(median ms: Int?) {}
     func takeSecond() -> (behindMs: Int?, late: Int)? { nil }
+    func setPictureInPicture(_ state: PictureInPicturePolicy.State) {}
 }
 
 extension StreamClient {
@@ -29,6 +30,26 @@ extension StreamClient {
 }
 
 extension StreamClient {
-    /// Whether the picture can be shown now (KeyframeRecovery): the app is active.
-    var pictureActive: Bool { NSApp.isActive }
+    /// This window's picture can be shown now (KeyframeRecovery): the app is active.
+    var sceneInFront: Bool { NSApp.isActive }
+}
+
+// Picture in Picture (#291) and the device's auto-lock hold are iPhone and iPad features: the Mac client
+// has neither, so the shared StreamClient meets these no-ops.
+final class PictureInPicture {
+    static let supported = false
+    init(client: StreamClient) {}
+    func end(_ ending: PictureInPicturePolicy.Ending, why: String) {}
+}
+
+final class PictureInPictureHub {
+    static let shared = PictureInPictureHub()
+    func used(_ client: StreamClient) {}
+    func update() {}
+}
+
+final class DeviceIdleTimer {
+    static let shared = DeviceIdleTimer()
+    func used() {}
+    func update() {}
 }

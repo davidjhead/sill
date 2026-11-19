@@ -140,6 +140,8 @@ final class HEVCDisplayView: NSView {
     // Called by StreamClient on the network queue.
     func apply(_ ps: ParameterSets) { feed.apply(ps) }
     func clear() { feed.clear() }
+    /// Picture in Picture's pause (#291) is an iPhone and iPad feature: the Mac's picture is never frozen.
+    func setFrozen(_ on: Bool) {}
     func blank() { feed.blank() }
     /// The client's network queue, as on iOS; the feed runs on it.
     var renderQueue: DispatchQueue?

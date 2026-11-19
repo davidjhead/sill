@@ -118,6 +118,19 @@ enum ClientPlatform {
         #endif
     }
 
+    /// A VoiceOver announcement, without the haptic or the beep: a change the person made shown in words
+    /// (the Desktop's next display).
+    static func announce(_ text: String) {
+        #if canImport(UIKit)
+        UIAccessibility.post(notification: .announcement, argument: text)
+        #else
+        if let window = NSApp.keyWindow {
+            NSAccessibility.post(element: window, notification: .announcementRequested,
+                                 userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        }
+        #endif
+    }
+
     /// The fastest rate this device's screen shows: 120 on ProMotion, 60 elsewhere. Main thread.
     static func screenMaximumFPS() -> Int {
         #if canImport(UIKit)
