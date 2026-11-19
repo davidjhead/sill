@@ -81,18 +81,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func connectedChanged(_ connected: Bool) {
+        windows.onRestored = { [weak self] in
+            guard let self, self.launcher.isShown else { return }
+            Timer.scheduledTimer(withTimeInterval: 0, repeats: false) { [weak self] _ in self?.launcher.show() }
+        }
         if connected {
             if let mac = client.session?.macID { UserDefaults.standard.set(mac, forKey: Self.lastMacKey) }
             connectWindow?.orderOut(nil)
-            // The session starts empty: the windows open last time with this Mac come back
-            // (StreamWindows), and with none the status item's menu opens so one can be picked. From
-            // a run-loop timer, never a main-queue block (the modal-loop rule): the menu's tracking
-            // loop runs inside whatever opened it, and inside a main-queue block it holds the main
-            // queue until the menu closes, so a session that ended meanwhile (the other Mac's Sill
-            // quit) was never ended and never reconnected while the menu stayed open.
-            Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in
-                guard let self, self.client.connected, self.windows.openSources.isEmpty else { return }
-                self.status?.open()
+            // The launcher's window comes in front of every other window, so something can be picked
+            // from all the other Mac offers (its apps, windows, Desktops and settings); the windows
+            // open last time with this Mac come back behind it (StreamWindows), and once they have,
+            // it comes in front of them again. From a run-loop timer, as everything this app opens
+            // from the session's start (the modal-loop rule).
+            Timer.scheduledTimer(withTimeInterval: 0, repeats: false) { [weak self] _ in
+                guard let self, self.client.connected else { return }
+                self.launcher.show()
             }
             #if DEBUG
             // -SillOpenWindows N: the host's first N windows open unfocused (side streams, nothing

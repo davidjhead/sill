@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 import StreamProtocol
 
-/// The launcher: a click on Sill Viewer's Dock icon (or opening it again from Finder) while a session is
-/// up brings forward a window of everything the other Mac offers to open (LauncherView): its Desktops,
+/// The launcher: on connecting, and on a click on Sill Viewer's Dock icon (or opening it again from Finder)
+/// while a session is up, it brings forward a window of everything the other Mac offers to open (LauncherView): its Desktops,
 /// its open windows, every app and its settings.
 ///
 /// An ordinary window, titled with the other Mac's name and the link's state, resizable, remembering its
@@ -22,6 +22,7 @@ final class Launcher: NSObject, NSWindowDelegate {
         if let window {
             NSApp.activate()
             window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
             return
         }
         let window = LauncherWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 660),
@@ -39,6 +40,7 @@ final class Launcher: NSObject, NSWindowDelegate {
         self.window = window
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()   // in front of other apps' windows too, though activation is only a request
     }
 
     func hide() { window?.close() }

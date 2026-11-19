@@ -23,9 +23,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         item.menu = menu
     }
 
-    /// Drops the menu down, as a click on the icon does.
-    func open() { item.button?.performClick(nil) }
-
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         if client.connected {

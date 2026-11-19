@@ -171,6 +171,9 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     private var keeping = true
     /// The list has been looked at for this session.
     private var restored = false
+    /// Called once last session's windows are open again (none, too), so the launcher can come back
+    /// in front of them (AppDelegate).
+    var onRestored: (() -> Void)?
 
     private func keep() {
         guard keeping, client.connected, !client.macName.isEmpty else { return }
@@ -193,6 +196,7 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         if UserDefaults.standard.bool(forKey: "SillResizeTest") { restored = true; return }   // the test's own window only
         #endif
         restored = true
+        defer { onRestored?() }
         windowLog("restore: key \(keptKey), saved \(UserDefaults.standard.data(forKey: keptKey)?.count ?? 0) bytes")
         guard let data = UserDefaults.standard.data(forKey: keptKey),
               let kept = try? JSONDecoder().decode([Kept].self, from: data), !kept.isEmpty else { return }
