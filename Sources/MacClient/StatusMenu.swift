@@ -30,6 +30,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         if client.connected {
             menu.addItem(header("Connected to \(client.macName)" + (client.linkStats.map { " · \($0.fps) fps" } ?? "")))
+            // The launcher, as a click on the Dock icon opens it, from a run-loop timer once the menu has
+            // closed (the modal-loop rule: never from inside the menu's tracking loop).
+            menu.addItem(action("Show All Apps and Windows") { [weak self] in
+                Timer.scheduledTimer(withTimeInterval: 0, repeats: false) { _ in self?.app.launcher.show() }
+            })
             windowItems(into: menu)
             menu.addItem(.separator())
             settingsItems(into: menu)

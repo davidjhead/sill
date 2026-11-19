@@ -1,0 +1,147 @@
+import Foundation
+import StreamProtocol
+
+/// The launcher (Launcher.swift, LauncherView.swift): what the other Mac offers to open, in the three
+/// sections the overlay shows, and what a search keeps of them.
+///
+/// - Desktops: one per display of a host that lists its `displays` (#66's, each a Desktop window of its
+///   own); else the one Desktop, named after the display it shows when the host says (#91's stops).
+/// - Windows: the host's windows in the bar's order, each by its title (its app's name when untitled).
+/// - Apps: every installed app, A to Z, with any app that has a window but is not installed in a
+///   listed folder added; `running` when it has a window.
+///
+/// A search (case and accents ignored) keeps what matches: a name or a word in it starting with the
+/// query first, then names containing it, each in its section's order. Return opens `firstChoice`:
+/// the first app, else the first window, else the first Desktop.
+///
+/// Pure: Foundation and StreamProtocol only, checked with swiftc (Tests/checks/launcher).
+struct LauncherModel: Equatable {
+    struct Desktop: Equatable {
+        var source: StreamSource
+        var name: String
+        var detail: String?
+        var isOpen: Bool
+    }
+
+    struct Window: Equatable {
+        var id: UInt32
+        var title: String
+        var appName: String
+        var bundleID: String
+        var isOpen: Bool
+    }
+
+    struct App: Equatable {
+        var bundleID: String
+        var name: String
+        var running: Bool
+    }
+
+    enum Choice: Equatable {
+        case desktop(StreamSource)
+        case window(UInt32)
+        case app(String)
+    }
+
+    /// What the client knows of the other Mac, as the launcher reads it.
+    struct Input: Equatable {
+        var windows: [WindowInfo] = []          // in the bar's order (StreamClient.orderedWindows)
+        var apps: [AppInfo] = []
+        var hostDisplays: [DisplayInfo] = []    // #66's host: each display a Desktop window
+        var desktopNames: [String]? = nil       // #91's stops, main's host
+        var desktopCurrent: Int? = nil          // counting from 1
+        var open: Set<StreamSource> = []        // sources with a window open here
+    }
+
+    var desktops: [Desktop]
+    var windows: [Window]
+    var apps: [App]
+
+    var isEmpty: Bool { desktops.isEmpty && windows.isEmpty && apps.isEmpty }
+
+    var firstChoice: Choice? {
+        if let a = apps.first { return .app(a.bundleID) }
+        if let w = windows.first { return .window(w.id) }
+        if let d = desktops.first { return .desktop(d.source) }
+        return nil
+    }
+
+    static func make(_ input: Input, query: String = "") -> LauncherModel {
+        let all = LauncherModel(desktops: desktops(input), windows: windows(input), apps: apps(input))
+        let q = fold(query.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard !q.isEmpty else { return all }
+        return LauncherModel(desktops: ranked(all.desktops, q) { [$0.name, $0.detail ?? ""] },
+                             windows: ranked(all.windows, q) { [$0.title, $0.appName] },
+                             apps: ranked(all.apps, q) { [$0.name] })
+    }
+
+    // MARK: Sections
+
+    private static func desktops(_ input: Input) -> [Desktop] {
+        if !input.hostDisplays.isEmpty {
+            let many = input.hostDisplays.count > 1
+            return input.hostDisplays.map { d in
+                let source = StreamSource.window(DesktopWindow.id(display: d.id))
+                return Desktop(source: source, name: many ? d.name : "Desktop",
+                               detail: many ? (d.main == true ? "Main display" : nil) : d.name,
+                               isOpen: input.open.contains(source))
+            }
+        }
+        var detail: String?
+        if let names = input.desktopNames, names.count > 1, let n = input.desktopCurrent, (1...names.count).contains(n) {
+            let name = names[n - 1].trimmingCharacters(in: .whitespacesAndNewlines)
+            detail = (name.isEmpty ? "Display \(n)" : name) + " · \(n) of \(names.count)"
+        }
+        return [Desktop(source: .desktop, name: "Desktop", detail: detail, isOpen: input.open.contains(.desktop))]
+    }
+
+    private static func windows(_ input: Input) -> [Window] {
+        input.windows.map { w in
+            Window(id: w.id, title: w.title.isEmpty ? w.appName : w.title, appName: w.appName,
+                   bundleID: w.bundleID, isOpen: input.open.contains(.window(w.id)))
+        }
+    }
+
+    private static func apps(_ input: Input) -> [App] {
+        let running = Set(input.windows.map(\.bundleID))
+        var seen = Set<String>()
+        var apps: [App] = []
+        for a in input.apps where seen.insert(a.bundleID).inserted {
+            apps.append(App(bundleID: a.bundleID, name: a.name, running: running.contains(a.bundleID)))
+        }
+        for w in input.windows where seen.insert(w.bundleID).inserted {
+            apps.append(App(bundleID: w.bundleID, name: w.appName, running: true))
+        }
+        return apps.sorted {
+            let order = $0.name.localizedStandardCompare($1.name)
+            return order == .orderedSame ? $0.bundleID < $1.bundleID : order == .orderedAscending
+        }
+    }
+
+    // MARK: Search
+
+    /// Case and accents ignored, so "cafe" finds "Café".
+    static func fold(_ s: String) -> String {
+        s.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+    }
+
+    /// 0: a name, or a word in it, starts with the query; 1: a name contains it; nil: no match.
+    static func rank(_ texts: [String], _ q: String) -> Int? {
+        var best: Int?
+        for text in texts where !text.isEmpty {
+            let t = fold(text)
+            if t.hasPrefix(q) || words(t).contains(where: { $0.hasPrefix(q) }) { return 0 }
+            if t.contains(q) { best = 1 }
+        }
+        return best
+    }
+
+    private static func words(_ t: String) -> [Substring] {
+        t.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+    }
+
+    private static func ranked<T>(_ items: [T], _ q: String, _ texts: (T) -> [String]) -> [T] {
+        let scored = items.enumerated().compactMap { i, item in rank(texts(item), q).map { (r: $0, i: i, item: item) } }
+        return scored.sorted { ($0.r, $0.i) < ($1.r, $1.i) }.map(\.item)
+    }
+}

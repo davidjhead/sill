@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var windows = StreamWindows(client: client)
     private(set) lazy var mainMenu = MainMenu(client: client)
     private var status: StatusMenu?
+    private(set) lazy var launcher = Launcher(app: self)
     private var clipboardSync: ClipboardSync?
     let audio = AudioPlayer()
     private var connectWindow: NSWindow?
@@ -61,9 +62,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
-    /// The status item stays; clicking the Dock icon with no window open shows what is useful.
+    /// A click on the Dock icon, or opening the app again from Finder: while a session is up, the launcher
+    /// (everything the other Mac offers to open), whatever windows are open, and a second click puts it
+    /// away; with none, the connect window when no window shows.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { client.connected ? status?.open() : showConnectWindow() }
+        if client.connected {
+            launcher.toggle()
+            return false   // the launcher stands for the windows AppKit would otherwise bring forward
+        }
+        if !flag { showConnectWindow() }
         return true
     }
 
