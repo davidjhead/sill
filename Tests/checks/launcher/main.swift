@@ -130,17 +130,25 @@ do {
 check(LauncherModel.toggled(["a", "b"], "c") == ["a", "b", "c"], "an app added goes last")
 check(LauncherModel.toggled(["a", "b", "c"], "b") == ["a", "c"], "an app removed leaves the rest in order")
 
-// All Apps by most recently used: those used from here, latest first, then the rest A to Z.
+// Recent: only what was used from here (apps, and Desktops by their recentKey), latest first, a tie A to Z;
+// empty until something is; a search still looks through every app; nothing of it in the A to Z order.
 do {
     var i = base
     i.appOrder = .recent
-    i.recents = ["com.apple.Notes": 500, "com.apple.dt.Xcode": 300, "com.apple.Safari": 300]   // the host lists Xcode before Safari
+    check(LauncherModel.make(i).apps.isEmpty && LauncherModel.make(i).recent.isEmpty, "Recent starts empty")
+    i.recents = ["com.apple.Notes": 500, "com.apple.dt.Xcode": 300, "com.apple.Safari": 300,
+                 LauncherModel.recentKey(.desktop): 400]   // the host lists Xcode before Safari
     let m = LauncherModel.make(i)
-    check(m.apps.map(\.name) == ["Notes", "Safari", "Xcode", "app Store", "Café Menu", "Calendar", "Helper Tool"],
-          "latest first, a tie A to Z, the never used after them A to Z: \(m.apps.map(\.name))")
-    check(LauncherModel.make(i, query: "a").apps.first?.name == "app Store", "a search ranks by its match first, whatever the order")
+    check(m.apps.map(\.name) == ["Notes", "Safari", "Xcode"], "only the used apps, latest first, a tie A to Z: \(m.apps.map(\.name))")
+    check(m.recent.map(\.name) == ["Notes", "Desktop", "Safari", "Xcode"], "Recent's list has the Desktop by when: \(m.recent.map(\.name))")
+    if case .desktop(let d)? = m.recent.dropFirst().first { check(d.source == .desktop, "the Desktop's tile opens the Desktop") }
+    else { check(false, "the second of Recent is the Desktop") }
+    check(LauncherModel.make(i, query: "a").apps.first?.name == "app Store", "a search in Recent looks through every app")
+    check(LauncherModel.make(i, query: "desk").recent.map(\.name) == ["Desktop"], "a search narrows Recent's list too")
+    check(LauncherModel.recentKey(.window(7)) == "desktop:7" && LauncherModel.recentKey(.desktop) == "desktop", "a display's Desktop has a key of its own")
     i.appOrder = .name
     check(LauncherModel.make(i).apps.map(\.name).first == "app Store", "A to Z ignores when apps were used")
+    check(LauncherModel.make(i).recent.isEmpty, "no Recent list in the A to Z order")
 }
 
 // The ranks themselves.

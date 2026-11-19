@@ -238,11 +238,12 @@ enum AgentHarness {
             "launcher": [
                 "shown": app.launcher.isShown,
                 "sidebarHidden": UserDefaults.standard.bool(forKey: "launcher.sidebarHidden"),
-                "appOrder": model.apps.isEmpty ? "" : app.launcher.input.appOrder.rawValue,
+                "appOrder": app.launcher.input.appOrder.rawValue,
                 "desktops": model.desktops.map { ["name": $0.name, "detail": $0.detail ?? "", "open": $0.isOpen] },
                 "windows": model.windows.map { ["id": $0.id, "title": $0.title, "app": $0.appName, "open": $0.isOpen] },
                 "favourites": model.favourites.map(\.name),
                 "apps": model.apps.map(\.name),
+                "recent": model.recent.map(\.name),
             ],
             "streamWindows": streams,
             "visibleWindows": NSApp.windows.filter(\.isVisible).map { $0.title.isEmpty ? String(describing: type(of: $0)) : $0.title },

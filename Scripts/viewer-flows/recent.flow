@@ -1,0 +1,26 @@
+# All Apps' Recent: empty until something is opened from here, then the apps and the Desktop opened, the
+# latest first. Favourites' shelf has labels (seen in the snapshot).
+wait apps 30
+click 867 171
+expect launcher.appOrder == recent
+expect launcher.recent == []
+snap recent-empty.png
+# An app opened from the search (the test host logs the launch and opens nothing)
+click 760 34
+type calc
+key return
+key esc
+launcher show
+expect launcher.recent contains Calculator
+expect launcher.recent !contains Notes
+# The Desktop opened from the sidebar
+click 75 242
+wait stream 15
+launcher show
+expect launcher.recent contains Desktop
+expect launcher.recent.0 == Desktop
+expect launcher.recent.1 == Calculator
+# A favourite, so the shelf shows with its label
+rightclick 370 226
+choose Add to Favourites
+snap recent-filled.png

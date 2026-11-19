@@ -74,7 +74,9 @@ final class Launcher: NSObject, NSWindowDelegate {
             open: { [weak self] choice in
                 guard let self else { return }
                 switch choice {
-                case .desktop(let source): self.app.windows.open(source)
+                case .desktop(let source):
+                    LauncherMemory.shared.used(LauncherModel.recentKey(source))   // Recent
+                    self.app.windows.open(source)
                 case .window(let id): self.app.windows.open(.window(id))
                 case .app(let bundleID):
                     LauncherMemory.shared.used(bundleID)

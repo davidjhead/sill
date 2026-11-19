@@ -281,11 +281,11 @@ struct LauncherView: View {
                         case .home:
                             if !model.windows.isEmpty || (sidebarHidden && !model.desktops.isEmpty) { openRow(model) }
                             if !model.favourites.isEmpty { favouritesShelf(model) } else if query.isEmpty { favouritesHint }
-                            if !model.apps.isEmpty { appGrid("All Apps", model.apps, sortable: true) }
+                            if !model.apps.isEmpty || !model.recent.isEmpty || query.isEmpty { allApps(model) }
                         case .favourites:
                             if model.favourites.isEmpty { favouritesHint } else { appGrid("Favourites", model.favourites, sortable: false) }
                         case .apps:
-                            appGrid("All Apps", model.apps, sortable: true)
+                            allApps(model)
                         }
                     }
                     .padding(.bottom, 14)
@@ -520,16 +520,17 @@ struct LauncherView: View {
     private func favouritesShelf(_ model: LauncherModel) -> some View {
         section("Favourites") {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
+                HStack(spacing: 6) {
                     ForEach(model.favourites, id: \.bundleID) { a in
                         Button { actions.open(.app(a.bundleID)) } label: {
-                            VStack(spacing: 4) {
+                            VStack(spacing: 5) {
                                 appIcon(a.bundleID, name: a.name, size: 52)
+                                Text(a.name).font(.system(size: 11)).foregroundStyle(.white.opacity(0.92))
+                                    .lineLimit(1).truncationMode(.tail).frame(width: 72)
                                 Circle().fill(.white.opacity(a.running ? 1 : 0)).frame(width: 4, height: 4)
                             }
                         }
                         .buttonStyle(LauncherTileStyle(padding: 2))
-                        .help(a.name)
                         .modifier(AppMenu(app: a, actions: actions))
                     }
                 }
@@ -550,6 +551,55 @@ struct LauncherView: View {
             .padding(.horizontal, 16).frame(height: 44)
             .background(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
         }
+    }
+
+    /// All Apps: A to Z, or Recent, which holds only what was opened from here (apps and Desktops),
+    /// latest first, and says so while it is empty.
+    @ViewBuilder private func allApps(_ model: LauncherModel) -> some View {
+        if page.input.appOrder == .recent && query.isEmpty {
+            section("All Apps", trailing: { sortControl }) {
+                if model.recent.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "clock")
+                        Text("Apps and Desktops you open from here show up here, the latest first.")
+                    }
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+                    .padding(.horizontal, 16).frame(height: 44)
+                    .background(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 84, maximum: 110), spacing: 4)], spacing: 10) {
+                        ForEach(Array(model.recent.enumerated()), id: \.offset) { _, item in
+                            switch item {
+                            case .app(let a): appTile(a)
+                            case .desktop(let d): recentDesktopTile(d)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            appGrid("All Apps", model.apps, sortable: true)
+        }
+    }
+
+    /// A Desktop in Recent: a display's picture where an app's icon would be.
+    private func recentDesktopTile(_ d: LauncherModel.Desktop) -> some View {
+        Button { actions.open(.desktop(d.source)) } label: {
+            VStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(LinearGradient(colors: [Color(red: 0.24, green: 0.43, blue: 0.69), Color(red: 0.42, green: 0.29, blue: 0.55)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .overlay(Image(systemName: "menubar.dock.rectangle").font(.system(size: 22, weight: .light)))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.6), lineWidth: 1.5))
+                    .frame(width: 52, height: 52)
+                    .shadow(color: .black.opacity(0.25), radius: 5, y: 3)
+                Text(d.name).font(.system(size: 11)).foregroundStyle(.white.opacity(0.92)).lineLimit(1).truncationMode(.tail)
+                Circle().fill(.white.opacity(d.isOpen ? 0.85 : 0)).frame(width: 4, height: 4)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(LauncherTileStyle())
+        .accessibilityLabel("\(d.name), Desktop" + (d.isOpen ? ", open" : ""))
     }
 
     private func appGrid(_ title: String, _ apps: [LauncherModel.App], sortable: Bool) -> some View {

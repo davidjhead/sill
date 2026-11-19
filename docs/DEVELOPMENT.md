@@ -591,7 +591,7 @@ docs/mac-client-plan.md has the design, the wire, Sill's desk, sound, files and 
 
 ```
 Scripts/make-client-app.sh --open          # .build/Sill Viewer.app (release; --debug for the test arguments; --notarize)
-Scripts/viewer-snapshot.sh [--push]        # a test build to roll back to: zip in ~/SillViewerBuilds, tag viewer-<version>-b<build>
+Scripts/viewer-snapshot.sh [--push]        # a test build to roll back to, once Scripts/viewer-test.sh passes: zip in ~/SillViewerBuilds, tag viewer-<version>-b<build>
 defaults write me.saffer.sill.client SillTiming -bool YES   # each window's pick to picture, step by step: ~/Library/Logs/Sill Viewer/open-timing.log
 Scripts/viewer_agent.py run /tmp/flows Scripts/viewer-flows/*.flow   # the launcher's flows, headless, against a test host on this Mac
 ```
