@@ -6,6 +6,11 @@ wait launcher 10
 expect locked == screenLocked
 expect counts.apps == 0
 snap locked.png
+# The tile opens the Desktop window (a locked Mac streams its lock screen there, to type the password)
+click 560 160
+wait stream 15
+expect active == desktop
+expect streamWindows > 0
 unlock
 wait apps 20
 expect locked != screenLocked

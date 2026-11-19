@@ -266,7 +266,11 @@ struct LauncherView: View {
         VStack(alignment: .leading, spacing: 14) {
             topBar
             if let why = page.locked {
-                lockedCard(why)
+                if why == .screenLocked, let desktop = model.desktops.first {
+                    unlockTile(desktop)
+                } else {
+                    lockedCard(why)
+                }
                 Spacer(minLength: 0)
             } else if model.isEmpty && (pane != .favourites || !query.isEmpty) {
                 emptyState
@@ -401,6 +405,42 @@ struct LauncherView: View {
         .padding(18)
         .background(Glass(cornerRadius: 16, fill: 0.12, stroke: 0.18))
         .accessibilityElement(children: .combine)
+    }
+
+    /// A locked Mac (design C, David's choice): its lock screen as a picture, what to do, and Unlock
+    /// Desktop. The whole tile is one button that opens the Desktop window, which a locked Mac still streams
+    /// (its lock screen, LockPolicy.lockScreenStreams), where a paired Mac types the password. The
+    /// picture's clock is this Mac's time, kept current; the unlock badge sits in its corner, clear of it.
+    private func unlockTile(_ desktop: LauncherModel.Desktop) -> some View {
+        Button { actions.open(.desktop(desktop.source)) } label: {
+            HStack(spacing: 24) {
+                LockScreenPicture()
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("\(page.macName) is locked", systemImage: "lock.fill")
+                        .font(.system(size: 17, weight: .bold))
+                    Text("Open its Desktop and type your password on the lock screen. Its apps and windows show here once it’s unlocked.")
+                        .font(.system(size: 13)).foregroundStyle(.white.opacity(0.75))
+                        .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 7) {
+                        Image(systemName: "lock.open.fill").font(.system(size: 13))
+                        Text("Unlock Desktop").font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(Color(red: 0.09, green: 0.13, blue: 0.23))
+                    .padding(.horizontal, 16).frame(height: 32)
+                    .background(Capsule().fill(.white))
+                    .padding(.top, 6)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: 20))
+        }
+        .buttonStyle(UnlockTileStyle())
+        .onHover { inside in if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
+        .help("Open \(page.macName)’s Desktop to unlock it")
+        .accessibilityLabel("\(page.macName) is locked. Unlock Desktop")
+        .accessibilityHint("Opens its Desktop, where you type your password on the lock screen.")
     }
 
     private var emptyState: some View {
@@ -641,6 +681,57 @@ struct Backdrop: View {
         RadialGradient(colors: [color.opacity(0.85), color.opacity(0.4), color.opacity(0)], center: .center,
                        startRadius: 0, endRadius: radius)
             .frame(width: radius * 2, height: radius * 2)
+    }
+}
+
+/// The unlock tile: frosted, brighter under the pointer, dimmed while pressed.
+private struct UnlockTileStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { Tile(configuration: configuration) }
+
+    private struct Tile: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var hovering = false
+        var body: some View {
+            configuration.label
+                .background(Glass(cornerRadius: 20, fill: hovering ? 0.16 : 0.10, stroke: hovering ? 0.28 : 0.18)
+                    .shadow(color: .black.opacity(hovering ? 0.25 : 0), radius: 15, y: 10))
+                .opacity(configuration.isPressed ? 0.75 : 1)
+                .onHover { hovering = $0 }
+                .animation(.easeOut(duration: 0.15), value: hovering)
+        }
+    }
+}
+
+/// A Mac's lock screen in miniature: this Mac's time (as its menu bar writes it, 12- or 24-hour), kept
+/// current each minute, the account's circle and the password field, and an unlock badge in the corner.
+private struct LockScreenPicture: View {
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(LinearGradient(colors: [Color(red: 0.16, green: 0.31, blue: 0.53), Color(red: 0.24, green: 0.18, blue: 0.39)],
+                                     startPoint: .top, endPoint: .bottom))
+            VStack(spacing: 7) {
+                TimelineView(.everyMinute) { context in
+                    Text(context.date, format: .dateTime.hour().minute())
+                        .font(.system(size: 30, weight: .light)).monospacedDigit()
+                }
+                Spacer(minLength: 0)
+                Circle().fill(.white.opacity(0.3)).frame(width: 28, height: 28)
+                Capsule().fill(.white.opacity(0.22)).frame(width: 104, height: 16)
+            }
+            .padding(.top, 14).padding(.bottom, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Image(systemName: "lock.open.fill").font(.system(size: 15, weight: .semibold))
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(.black.opacity(0.45)))
+                .overlay(Circle().strokeBorder(.white.opacity(0.25)))
+                .padding(10)
+        }
+        .frame(width: 250, height: 156)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.85), lineWidth: 3))
+        .shadow(color: .black.opacity(0.35), radius: 17, y: 14)
+        .accessibilityHidden(true)
     }
 }
 
