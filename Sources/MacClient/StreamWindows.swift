@@ -539,6 +539,7 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     func windowDidBecomeKey(_ notification: Notification) {
         guard let window = notification.object as? StreamWindow else { return }
         windowLog("key: \(window.source)")
+        if case .window(let id) = window.source, let app = appOf[id] { LauncherMemory.shared.used(app) }   // All Apps' Recent order
         updatePill()
         syncDock()   // the Dock menu's ✓ follows the front window
         focused(window)

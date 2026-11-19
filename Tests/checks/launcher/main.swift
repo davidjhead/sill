@@ -111,6 +111,38 @@ do {
     check(blank == LauncherModel.make(base), "a blank search is no search")
 }
 
+// Favourites: in the order added, only apps the other Mac lists, each once; searched like the rest.
+do {
+    var i = base
+    i.favourites = ["com.apple.Safari", "com.gone.app", "com.apple.Notes", "com.apple.Safari"]
+    let m = LauncherModel.make(i)
+    check(m.favourites.map(\.name) == ["Safari", "Notes"], "favourites in the order added, unlisted and repeated left out: \(m.favourites.map(\.name))")
+    check(m.apps.filter(\.isFavourite).map(\.name) == ["Notes", "Safari"], "All Apps marks the favourites: \(m.apps.filter(\.isFavourite).map(\.name))")
+    check(m.apps.count == 7, "a favourite stays in All Apps too")
+    check(m.favourites.first { $0.name == "Safari" }?.running == true, "a favourite says when it runs")
+    check(LauncherModel.make(i, query: "saf").favourites.map(\.name) == ["Safari"], "a search keeps the favourites that match")
+    check(LauncherModel.make(base).favourites.isEmpty, "no favourites: an empty section")
+    var only = LauncherModel.Input(); only.apps = [AppInfo(name: "Notes", bundleID: "n")]; only.favourites = ["n"]
+    check(!LauncherModel.make(only, query: "no").isEmpty, "a model with only a favourite and its app is not empty")
+}
+
+// Toggling a favourite: added at the end, removed from wherever it is.
+check(LauncherModel.toggled(["a", "b"], "c") == ["a", "b", "c"], "an app added goes last")
+check(LauncherModel.toggled(["a", "b", "c"], "b") == ["a", "c"], "an app removed leaves the rest in order")
+
+// All Apps by most recently used: those used from here, latest first, then the rest A to Z.
+do {
+    var i = base
+    i.appOrder = .recent
+    i.recents = ["com.apple.Notes": 500, "com.apple.dt.Xcode": 300, "com.apple.Safari": 300]   // the host lists Xcode before Safari
+    let m = LauncherModel.make(i)
+    check(m.apps.map(\.name) == ["Notes", "Safari", "Xcode", "app Store", "Café Menu", "Calendar", "Helper Tool"],
+          "latest first, a tie A to Z, the never used after them A to Z: \(m.apps.map(\.name))")
+    check(LauncherModel.make(i, query: "a").apps.first?.name == "app Store", "a search ranks by its match first, whatever the order")
+    i.appOrder = .name
+    check(LauncherModel.make(i).apps.map(\.name).first == "app Store", "A to Z ignores when apps were used")
+}
+
 // The ranks themselves.
 check(LauncherModel.rank(["Visual Studio Code"], "stu") == 0, "a word's start ranks 0")
 check(LauncherModel.rank(["Visual Studio Code"], "udi") == 1, "inside a word ranks 1")

@@ -87,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if connected {
             if let mac = client.session?.macID { UserDefaults.standard.set(mac, forKey: Self.lastMacKey) }
+            LauncherMemory.shared.use(mac: client.session?.macID)   // the launcher's favourites and recents of this Mac
             connectWindow?.orderOut(nil)
             // The launcher's window comes in front of every other window, so something can be picked
             // from all the other Mac offers (its apps, windows, Desktops and settings); the windows

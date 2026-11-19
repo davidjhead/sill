@@ -6,8 +6,8 @@ import StreamProtocol
 /// while a session is up, it brings forward a window of everything the other Mac offers to open (LauncherView): its Desktops,
 /// its open windows, every app and its settings.
 ///
-/// An ordinary window, titled with the other Mac's name and the link's state, resizable, remembering its
-/// frame. It stays open after a choice (the stream's window opens in front of it), and closes with its
+/// An ordinary window, titled with the other Mac's name and the link's state (shown in its sidebar: the
+/// title bar is see-through over the launcher's backdrop), resizable, remembering its frame. It stays open after a choice (the stream's window opens in front of it), and closes with its
 /// close button, Command-W, Escape, Disconnect or the session's end. Main thread.
 final class Launcher: NSObject, NSWindowDelegate {
     private unowned let app: AppDelegate
@@ -26,10 +26,15 @@ final class Launcher: NSObject, NSWindowDelegate {
             return
         }
         let window = LauncherWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 660),
-                                    styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                                    styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                     backing: .buffered, defer: false)
-        window.title = app.client.macName
-        window.contentMinSize = NSSize(width: 600, height: 440)
+        window.title = app.client.macName   // for the Window menu and Mission Control; the sidebar shows it
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.toolbar = NSToolbar(identifier: "SillLauncher")   // empty: a taller bar puts its buttons inside the sidebar
+        window.toolbarStyle = .unified
+        window.appearance = NSAppearance(named: .darkAqua)   // the launcher is dark always (LauncherView)
+        window.contentMinSize = NSSize(width: 640, height: 440)
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
         window.delegate = self
@@ -65,10 +70,14 @@ final class Launcher: NSObject, NSWindowDelegate {
                 switch choice {
                 case .desktop(let source): self.app.windows.open(source)
                 case .window(let id): self.app.windows.open(.window(id))
-                case .app(let bundleID): self.app.client.launch(bundleID: bundleID)
+                case .app(let bundleID):
+                    LauncherMemory.shared.used(bundleID)
+                    self.app.client.launch(bundleID: bundleID)
                 }
             },
             close: { [weak self] in self?.hide() },
+            toggleFavourite: { LauncherMemory.shared.toggleFavourite($0) },
+            setAppOrder: { LauncherMemory.shared.appOrder = $0 },
             setQuality: { [weak self] in self?.app.client.changeSettings(HostSettingsChange(bitrate: $0)) },
             setMaxFPS: { [weak self] in self?.app.client.changeSettings(HostSettingsChange(maxFPS: $0)) },
             toggleSound: { [weak self] in
@@ -91,6 +100,7 @@ final class Launcher: NSObject, NSWindowDelegate {
 /// settings change, and after a switch of this Mac's own (Sound, Shortcuts), which nothing publishes.
 private struct LiveLauncher: View {
     @ObservedObject var client: StreamClient
+    @ObservedObject var memory = LauncherMemory.shared
     let launcher: Launcher
     @State private var ownSwitches = 0
 
@@ -103,7 +113,9 @@ private struct LiveLauncher: View {
                                        hostDisplays: client.hostDisplays,
                                        desktopNames: client.hostDesktopDisplayNames,
                                        desktopCurrent: client.hostDesktopDisplay,
-                                       open: launcher.openSources),
+                                       open: launcher.openSources,
+                                       favourites: memory.favourites, recents: memory.recents,
+                                       appOrder: memory.appOrder),
             icons: client.icons,
             thumbnails: client.thumbnails,
             settings: LauncherPage.Settings(bitrate: client.settings.displayed?.bitrate,

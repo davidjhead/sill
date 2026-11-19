@@ -1,14 +1,17 @@
 import Foundation
 import StreamProtocol
 
-/// The launcher (Launcher.swift, LauncherView.swift): what the other Mac offers to open, in the three
-/// sections the overlay shows, and what a search keeps of them.
+/// The launcher (Launcher.swift, LauncherView.swift): what the other Mac offers to open, in the
+/// sections the launcher shows, and what a search keeps of them.
 ///
 /// - Desktops: one per display of a host that lists its `displays` (#66's, each a Desktop window of its
 ///   own); else the one Desktop, named after the display it shows when the host says (#91's stops).
 /// - Windows: the host's windows in the bar's order, each by its title (its app's name when untitled).
-/// - Apps: every installed app, A to Z, with any app that has a window but is not installed in a
-///   listed folder added; `running` when it has a window.
+/// - Favourites: the apps added to them here (a right-click on an app), in the order added; one the
+///   other Mac no longer lists is left out, and comes back if it does again.
+/// - Apps: every installed app, with any app that has a window but is not installed in a listed folder
+///   added; `running` when it has a window. A to Z, or the most recently used first (those used from
+///   this Mac, latest first, then the rest A to Z).
 ///
 /// A search (case and accents ignored) keeps what matches: a name or a word in it starting with the
 /// query first, then names containing it, each in its section's order. Return opens `firstChoice`:
@@ -35,6 +38,13 @@ struct LauncherModel: Equatable {
         var bundleID: String
         var name: String
         var running: Bool
+        var isFavourite = false
+    }
+
+    /// How All Apps is sorted.
+    enum AppOrder: String, Equatable, CaseIterable {
+        case name      // A to Z
+        case recent    // most recently used first
     }
 
     enum Choice: Equatable {
@@ -51,13 +61,17 @@ struct LauncherModel: Equatable {
         var desktopNames: [String]? = nil       // #91's stops, main's host
         var desktopCurrent: Int? = nil          // counting from 1
         var open: Set<StreamSource> = []        // sources with a window open here
+        var favourites: [String] = []           // bundle IDs, in the order added
+        var recents: [String: Double] = [:]     // bundle ID → when last used from this Mac (seconds)
+        var appOrder: AppOrder = .name
     }
 
     var desktops: [Desktop]
     var windows: [Window]
+    var favourites: [App] = []
     var apps: [App]
 
-    var isEmpty: Bool { desktops.isEmpty && windows.isEmpty && apps.isEmpty }
+    var isEmpty: Bool { desktops.isEmpty && windows.isEmpty && favourites.isEmpty && apps.isEmpty }
 
     var firstChoice: Choice? {
         if let a = apps.first { return .app(a.bundleID) }
@@ -67,12 +81,22 @@ struct LauncherModel: Equatable {
     }
 
     static func make(_ input: Input, query: String = "") -> LauncherModel {
-        let all = LauncherModel(desktops: desktops(input), windows: windows(input), apps: apps(input))
+        let apps = apps(input)
+        let byID = Dictionary(apps.map { ($0.bundleID, $0) }, uniquingKeysWith: { a, _ in a })
+        var seen = Set<String>()
+        let favourites = input.favourites.compactMap { id in seen.insert(id).inserted ? byID[id] : nil }
+        let all = LauncherModel(desktops: desktops(input), windows: windows(input), favourites: favourites, apps: apps)
         let q = fold(query.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !q.isEmpty else { return all }
         return LauncherModel(desktops: ranked(all.desktops, q) { [$0.name, $0.detail ?? ""] },
                              windows: ranked(all.windows, q) { [$0.title, $0.appName] },
+                             favourites: ranked(all.favourites, q) { [$0.name] },
                              apps: ranked(all.apps, q) { [$0.name] })
+    }
+
+    /// The favourites after a right-click's Add or Remove: added at the end, removed wherever it is.
+    static func toggled(_ favourites: [String], _ bundleID: String) -> [String] {
+        favourites.contains(bundleID) ? favourites.filter { $0 != bundleID } : favourites + [bundleID]
     }
 
     // MARK: Sections
@@ -104,17 +128,32 @@ struct LauncherModel: Equatable {
 
     private static func apps(_ input: Input) -> [App] {
         let running = Set(input.windows.map(\.bundleID))
+        let favourite = Set(input.favourites)
         var seen = Set<String>()
         var apps: [App] = []
         for a in input.apps where seen.insert(a.bundleID).inserted {
-            apps.append(App(bundleID: a.bundleID, name: a.name, running: running.contains(a.bundleID)))
+            apps.append(App(bundleID: a.bundleID, name: a.name, running: running.contains(a.bundleID),
+                            isFavourite: favourite.contains(a.bundleID)))
         }
         for w in input.windows where seen.insert(w.bundleID).inserted {
-            apps.append(App(bundleID: w.bundleID, name: w.appName, running: true))
+            apps.append(App(bundleID: w.bundleID, name: w.appName, running: true, isFavourite: favourite.contains(w.bundleID)))
         }
-        return apps.sorted {
+        let byName: (App, App) -> Bool = {
             let order = $0.name.localizedStandardCompare($1.name)
             return order == .orderedSame ? $0.bundleID < $1.bundleID : order == .orderedAscending
+        }
+        switch input.appOrder {
+        case .name:
+            return apps.sorted(by: byName)
+        case .recent:
+            return apps.sorted { a, b in
+                switch (input.recents[a.bundleID], input.recents[b.bundleID]) {
+                case let (x?, y?): return x == y ? byName(a, b) : x > y
+                case (.some, nil): return true
+                case (nil, .some): return false
+                case (nil, nil): return byName(a, b)
+                }
+            }
         }
     }
 
