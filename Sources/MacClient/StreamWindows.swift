@@ -40,6 +40,8 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     /// The last source this Mac asked the host for (a focus): the host drops a pick that comes while
     /// it is still switching, so one its list does not name is asked for again.
     private var requested: StreamSource?
+    /// When `requested` was last asked for (uptime), for `listCame`.
+    private var askedAt: TimeInterval = 0
     /// A Dock icon per remote app with a window open here.
     let dock = DockProxies()
     /// The focused window's controls (close, minimize, full screen, its title), above it.
@@ -150,13 +152,20 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         }
         let router = self.router
         // The Desktop as the window of the display it shows (Self.local), so two displays are two streams.
-        client.onWindowListActive = { active, display in
+        client.onWindowListActive = { [weak self] active, display in
+            OpenTiming.mark("list names \(active)")
+            DispatchQueue.main.async { self?.listCame(active) }
             router.listed(active: active == .desktop && display != nil ? .window(DesktopWindow.id(display: display!)) : active)
         }
         let shownPS = client.onParameterSets
-        client.onParameterSets = { ps in shownPS?(ps); router.parameterSets(ps) }
+        client.onParameterSets = { ps in OpenTiming.parameterSets(); shownPS?(ps); router.parameterSets(ps) }
         let shownFrame = client.onFrame
-        client.onFrame = { data, isKey in shownFrame?(data, isKey); router.frame(data, isKeyframe: isKey) }
+        client.onFrame = { data, isKey in
+            OpenTiming.frame(data.count, keyframe: isKey)
+            shownFrame?(data, isKey)
+            router.frame(data, isKeyframe: isKey)
+            if OpenTiming.enabled, let feed = OpenTiming.feed, router.draws(into: feed) { OpenTiming.firstDrawn(data.count, keyframe: isKey) }
+        }
     }
 
     var openSources: Set<StreamSource> { Set(open.keys) }
@@ -442,6 +451,7 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         }
         requested = nil
         input.flushHeld()
+        OpenTiming.mark("main thread: host streams \(active); attach (viewport at the window's size)")
         if open[active] == nil { open(active) }
         attach(to: active)
         requestSideStreams()
@@ -571,13 +581,32 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         }
         if window.isKeyWindow { window.makeFirstResponder(input) }
         input.textScale = nil
+        OpenTiming.picked(source, "(window \(Int(window.frame.width))×\(Int(window.frame.height)))", feed: window.side.feed)
         input.sendViewportNow()
         ask(source)
         watchPick(source, tries: 0)
     }
 
+    /// A window list from the host while a pick is out. The host drops a pick that comes while it
+    /// switches to something else (handlePick: only a restart queues one), and its list at the end of
+    /// that switch names the other source. `active` may not change then (the same source restarted),
+    /// so `activeChanged` never asks again, and the pick waited for `watchPick`'s 1.5 s (2026-11-19:
+    /// 1.6 s to a window's picture against 0.4 s for the next). A list naming another source, a moment
+    /// after the pick went (not one already on its way), asks again at once. A pick asked twice costs
+    /// nothing: the host drops or queues the second as it does the first, and takes a pick of what it
+    /// already streams as done.
+    private func listCame(_ listed: StreamSource) {
+        guard let wanted = requested, client.connected, open[wanted] != nil, local(listed) != wanted else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - askedAt > 0.15 else { return }
+        windowLog("pick \(wanted): the host's list names \(listed); asking again")
+        OpenTiming.mark("list names another source: asked again")
+        ask(wanted)
+    }
+
     /// The host asked for `source`: a Desktop window is the Desktop on its display.
     private func ask(_ source: StreamSource) {
+        askedAt = ProcessInfo.processInfo.systemUptime
         if let d = display(of: source) {
             if client.desktopDisplay != d.id { client.pickDisplay(d.id) }
             client.select(.desktop)
@@ -594,6 +623,7 @@ final class StreamWindows: NSObject, NSWindowDelegate {
             guard let self, self.requested == source, self.local(self.client.active) != source, self.client.connected else { return }
             if tries < 2, self.open[source] != nil {
                 windowLog("pick \(source) not taken after 1.5 s; asking again")
+                OpenTiming.mark("not taken after 1.5 s: asked again")
                 self.ask(source)
                 self.watchPick(source, tries: tries + 1)
             } else {
