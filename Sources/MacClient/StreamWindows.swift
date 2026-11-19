@@ -616,12 +616,26 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     /// The host asked for `source`: a Desktop window is the Desktop on its display.
     private func ask(_ source: StreamSource) {
         askedAt = ProcessInfo.processInfo.systemUptime
+        wakeDisplay()
         if let d = display(of: source) {
             if client.desktopDisplay != d.id { client.pickDisplay(d.id) }
             client.select(.desktop)
         } else {
             client.select(source)
         }
+    }
+
+    /// A pick made here is a person's (a window or the Desktop chosen), but the host never counts a pick
+    /// as someone using the Mac (DisplayWake: devices pick by themselves), so a Mac whose display slept
+    /// starts nothing and the pick is not taken. Input does count, from any device and any host since the
+    /// first public build: one pointer move, sent only while nothing streams, makes the host declare user
+    /// activity (as a key press at the Mac does) and the display comes on; the host then drops the move,
+    /// having nowhere to put it, so nothing moves or is clicked. Each ask sends it, the retries too (the
+    /// host declares at most once every 5 s); the next ask finds the display on and the stream starts.
+    private func wakeDisplay() {
+        guard client.connected, client.active == .none else { return }
+        OpenTiming.mark("nothing streams: a pointer move to wake the Mac's display")
+        client.sendInput(.pointer(.move, x: 0.5, y: 0.5))
     }
 
     /// A pick the host has not taken (it was switching, or the message went with a connection that
