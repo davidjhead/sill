@@ -20,6 +20,11 @@
   tile. The result is cached in `.build/icon`. A layered
   `Packaging/AppIcon.icon` made in Icon Composer from the SVG's four groups
   replaces the generated one as soon as it exists.
+- `ViewerIcon.svg` — Sill Viewer's icon (the Mac client, Sources/MacClient): Sill's
+  icon with a MacBook in front of the iMac where the iPad is, on the same grid
+  with the same four groups (background, iMac, MacBook, window).
+  `Scripts/make-client-app.sh` compiles it as `make-app.sh` compiles Sill's,
+  cached in `.build/viewer-icon`.
 - `DMGBackground.svg` — the window of Sill.dmg, the Mac download: 660 x 400
   points of white, an arrow from where Sill.app sits (170, 180) to
   Applications (490, 180) in the app icon's greys, and "To install Sill, drag

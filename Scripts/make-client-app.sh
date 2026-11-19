@@ -8,8 +8,9 @@
 # else the first Apple Development one, else ad hoc. A real identity keeps the login keychain's
 # device key and the privacy grants (Local Network, Accessibility) across rebuilds and copies to
 # another Mac: both name the signature's designated requirement, which an ad hoc signature changes
-# with every build. Notarizing uses the notarytool profile SILL_NOTARY_PROFILE (sill-notary). The icon is Sill.app's, taken
-# from .build/Sill.app when Scripts/make-app.sh has built it.
+# with every build. Notarizing uses the notarytool profile SILL_NOTARY_PROFILE (sill-notary). The icon
+# is design/ViewerIcon.svg, compiled as Scripts/make-app.sh compiles Sill's (Quick Look's render as the
+# one layer of an Icon Composer document, then actool), cached in .build/viewer-icon.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 config=release; open_after=0; notarize=0
@@ -49,12 +50,28 @@ cat > "$helper/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(git rev-list --count HEAD 2>/dev/null || echo 1)" "$app/Contents/Info.plist"
-if [ -f .build/Sill.app/Contents/Resources/AppIcon.icns ]; then
-    cp .build/Sill.app/Contents/Resources/AppIcon.icns "$app/Contents/Resources/"
-    [ -f .build/Sill.app/Contents/Resources/Assets.car ] && cp .build/Sill.app/Contents/Resources/Assets.car "$app/Contents/Resources/"
-else
-    echo "note: no icon (run Scripts/make-app.sh once to make Sill.app's)" >&2
+# The icon: design/ViewerIcon.svg, as make-app.sh does Sill's (its comment says why actool, not iconutil).
+icon_out="$PWD/.build/viewer-icon"   # absolute: actool resolves relative paths in its helper's directory
+if [ ! -f "$icon_out/compiled/Assets.car" ] || [ design/ViewerIcon.svg -nt "$icon_out/compiled/Assets.car" ] \
+   || [ "$0" -nt "$icon_out/compiled/Assets.car" ]; then
+    rm -rf "$icon_out"; doc="$icon_out/AppIcon.icon"; mkdir -p "$icon_out/compiled" "$doc/Assets"
+    qlmanage -t -s 1024 -o "$icon_out" "$PWD/design/ViewerIcon.svg" >/dev/null 2>&1 || true
+    if mv "$icon_out/ViewerIcon.svg.png" "$doc/Assets/Viewer.png" 2>/dev/null; then
+        cat > "$doc/icon.json" <<'JSON'
+{
+  "fill" : { "solid" : "srgb:0.00000,0.00000,0.00000,1.00000" },
+  "groups" : [ { "layers" : [ { "image-name" : "Viewer.png", "name" : "Viewer" } ] } ],
+  "supported-platforms" : { "squares" : [ "macOS" ] }
+}
+JSON
+        xcrun actool --compile "$icon_out/compiled" --platform macosx --minimum-deployment-target 14.0 \
+            --app-icon AppIcon --output-partial-info-plist "$icon_out/partial.plist" "$doc" >/dev/null \
+            || echo "warning: actool could not compile the icon; Sill Viewer gets the generic icon" >&2
+    else
+        echo "warning: Quick Look did not render design/ViewerIcon.svg; Sill Viewer gets the generic icon" >&2
+    fi
 fi
+cp "$icon_out"/compiled/* "$app/Contents/Resources/" 2>/dev/null || true
 ids="$(security find-identity -v -p codesigning 2>/dev/null || true)"
 identity="${SILL_SIGN_IDENTITY:-$(echo "$ids" | awk '/"Developer ID Application: / { print $2; exit }')}"
 [ -n "$identity" ] || identity="$(echo "$ids" | awk '/"Apple Development: / { print $2; exit }')"
