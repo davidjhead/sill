@@ -251,16 +251,7 @@ struct LauncherView: View {
     private var topBar: some View {
         HStack(spacing: 10) {
             if sidebarHidden { Color.clear.frame(width: 70, height: 1) }   // the window's buttons
-            Button(action: toggleSidebar) {
-                Image(systemName: "sidebar.left").font(.system(size: 14))
-                    .frame(width: 32, height: 32)
-                    .background(Glass(cornerRadius: 16, fill: sidebarHidden ? 0.14 : 0, stroke: sidebarHidden ? 0.2 : 0))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut("s", modifiers: [.control, .command])
-            .help(sidebarHidden ? "Show Sidebar (⌃⌘S)" : "Hide Sidebar (⌃⌘S)")
-            .accessibilityLabel(sidebarHidden ? "Show Sidebar" : "Hide Sidebar")
+            else { sidebarButton }
             VStack(alignment: .leading, spacing: 0) {
                 Text(title).font(.system(size: 22, weight: .bold)).lineLimit(1)
                 if sidebarHidden {
@@ -268,10 +259,25 @@ struct LauncherView: View {
                 }
             }
             Spacer(minLength: 8)
+            if sidebarHidden { sidebarButton }
             search
             if sidebarHidden { settingsCapsule }
         }
         .frame(height: 40)
+    }
+
+    /// Hides the sidebar from beside the title; while it is hidden, shows it from beside the search.
+    private var sidebarButton: some View {
+        Button(action: toggleSidebar) {
+            Image(systemName: "sidebar.left").font(.system(size: 14))
+                .frame(width: 32, height: 32)
+                .background(Glass(cornerRadius: 16, fill: sidebarHidden ? 0.14 : 0, stroke: sidebarHidden ? 0.2 : 0))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("s", modifiers: [.control, .command])
+        .help(sidebarHidden ? "Show Sidebar (⌃⌘S)" : "Hide Sidebar (⌃⌘S)")
+        .accessibilityLabel(sidebarHidden ? "Show Sidebar" : "Hide Sidebar")
     }
 
     private var title: String {
