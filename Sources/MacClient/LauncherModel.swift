@@ -107,7 +107,10 @@ struct LauncherModel: Equatable {
 
     static func make(_ input: Input, query: String = "") -> LauncherModel {
         let apps = apps(input)
-        let byID = Dictionary(apps.map { ($0.bundleID, $0) }, uniquingKeysWith: { a, _ in a })
+        // The favourites from every app the other Mac lists, whatever All Apps' order: Recent's list holds
+        // only the apps used, and a favourite never opened from here is a favourite still.
+        let every = input.appOrder == .name ? apps : Self.apps(named(input))
+        let byID = Dictionary(every.map { ($0.bundleID, $0) }, uniquingKeysWith: { a, _ in a })
         var seen = Set<String>()
         let favourites = input.favourites.compactMap { id in seen.insert(id).inserted ? byID[id] : nil }
         let desktops = desktops(input)

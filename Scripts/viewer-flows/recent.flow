@@ -1,26 +1,33 @@
 # All Apps' Recent: empty until something is opened from here, then the apps and the Desktop opened, the
-# latest first. Favourites' shelf has labels (seen in the snapshot).
+# latest first; the favourites stay whatever the order (one added in A to Z, never opened).
 wait apps 30
-click 867 171
+# A favourite in A to Z (Calculator: second row, last column), never opened from here
+rightclick 853 326
+choose Add to Favourites
+expect launcher.favourites contains Calculator
+# Recent: empty, and the favourite still there (the shelf moved All Apps down: the switch is at 225)
+click 867 225
 expect launcher.appOrder == recent
 expect launcher.recent == []
+expect launcher.favourites contains Calculator
 snap recent-empty.png
 # An app opened from the search (the test host logs the launch and opens nothing)
 click 760 34
-type calc
+type chess
 key return
 key esc
 launcher show
-expect launcher.recent contains Calculator
-expect launcher.recent !contains Notes
-# The Desktop opened from the sidebar
+expect launcher.recent contains Chess
+expect launcher.recent !contains Calculator
+# The Desktop opened from the sidebar comes first
 click 75 242
 wait stream 15
 launcher show
-expect launcher.recent contains Desktop
 expect launcher.recent.0 == Desktop
-expect launcher.recent.1 == Calculator
-# A favourite, so the shelf shows with its label
-rightclick 370 226
-choose Add to Favourites
+expect launcher.recent.1 == Chess
+expect launcher.favourites contains Calculator
 snap recent-filled.png
+# Back to A to Z: every app, the favourite still there
+click 813 225
+expect launcher.appOrder == name
+expect launcher.favourites contains Calculator

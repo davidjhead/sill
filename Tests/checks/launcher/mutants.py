@@ -26,6 +26,7 @@ MUTANTS = [
     ("a search in Recent only through the used", "ranked(input.appOrder == .name ? all.apps : Self.apps(named(input)), q)", "ranked(all.apps, q)"),
     ("Recent's list not searched", "recent: ranked(all.recent, q) { [$0.name] })", "recent: all.recent)"),
     ("a Recent list in the A to Z order", "recent: input.appOrder == .recent ? recent(apps, desktops, input.recents) : [])", "recent: recent(apps, desktops, input.recents))"),
+    ("favourites only from Recent's list", "let every = input.appOrder == .name ? apps : Self.apps(named(input))", "let every = apps"),
     ("one key for every Desktop", "case .window(let id): return \"desktop:\\(id)\"", "case .window: return \"desktop\""),
     ("one display named as many", "let many = input.hostDisplays.count > 1", "let many = true"),
     ("the main display not said", "d.main == true ? \"Main display\" : nil", "nil"),

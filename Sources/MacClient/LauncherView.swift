@@ -92,6 +92,9 @@ struct LauncherView: View {
         .environment(\.colorScheme, .dark)
         .onAppear { searchFocused = true }
         .onExitCommand { actions.close() }
+        #if DEBUG
+        .onChange(of: query, initial: true) { _, q in LauncherQuery.current = q }   // the agent harness's state
+        #endif
     }
 
     private func toggleSidebar() {
@@ -690,6 +693,11 @@ struct LauncherView: View {
         .frame(maxWidth: 206)
     }
 }
+
+#if DEBUG
+/// The launcher's search as typed, for the agent harness's `state` (AgentHarness).
+enum LauncherQuery { static var current = "" }
+#endif
 
 /// An app's right-click menu and its accessibility, the same in the grid and on the shelf.
 private struct AppMenu: ViewModifier {

@@ -26,7 +26,12 @@ quit); `send OUT unlock|lock` writes the host's lock file. A flow file has one s
     expect launcher.favourites contains Notes
     snap OUT/after-fav.png               a relative path is under OUT
 
-`run` prints each step and PASS or FAIL for each expect, and exits 1 when one failed.
+`run` prints each step and PASS or FAIL for each expect, and exits 1 when one failed. It also holds
+every flow to rules no step names (`INVARIANTS`), checked after each step while the launcher shows:
+- the favourites change only at a `choose … Favourites` step (a sort, a pane, the sidebar, a search, a
+  Desktop or an app opened leave them as they were);
+- in the A to Z order All Apps lists every app the host sent, and with no search the favourites are
+  all among them.
 Needs `swift build` (debug) and `swift build -c release`.
 """
 import json, os, re, signal, subprocess, sys, time
@@ -151,6 +156,19 @@ def check(state, path, op, want):
     return ok, got
 
 
+def invariants(before, after, step):
+    """The rules every step keeps (see the docstring); a list of what broke."""
+    broke = []
+    if not (after.get("connected") and after.get("page") == "launcher" and before.get("page") == "launcher"):
+        return broke
+    lb, la = before.get("launcher", {}), after.get("launcher", {})
+    if la.get("favourites") != lb.get("favourites") and not re.match(r"choose .*favourites", step, re.I):
+        broke.append(f"the favourites changed at “{step}”: {lb.get('favourites')} → {la.get('favourites')}")
+    if la.get("appOrder") == "name" and not after.get("query") and len(la.get("apps", [])) not in (0, after.get("counts", {}).get("apps")):
+        broke.append(f"A to Z lists {len(la.get('apps', []))} apps of {after.get('counts', {}).get('apps')}")
+    return broke
+
+
 def run(out, flows):
     failed = 0
     for flow in flows:
@@ -158,6 +176,7 @@ def run(out, flows):
         flags = next((l.split()[1:] for l in lines if l.startswith("start-flags ")), [])
         print(f"== {flow}" + (f" ({' '.join(flags)})" if flags else ""))
         start(out, flags)
+        last = None
         try:
             for line in lines:
                 if not line or line.startswith("#") or line.startswith("start-flags "): continue
@@ -172,9 +191,15 @@ def run(out, flows):
                 words = line.split()
                 if words[0] == "snap" and len(words) > 1 and not os.path.isabs(words[1]):
                     words[1] = os.path.join(os.path.abspath(out), words[1]); line = " ".join(words)
+                if last is None: last = send(out, "state")
                 answer = send(out, line)
                 print(f"  {'ok  ' if answer.get('ok') else 'ERR '}  {line}" + ("" if answer.get("ok") else f"   ({answer.get('error')})"))
                 if not answer.get("ok"): failed += 1
+                if words[0] in ("snap", "rightclick"): continue   # a right-click's menu is still open: judged after its choose
+                now = send(out, "state")
+                for broke in invariants(last, now, line):
+                    print(f"  FAIL  invariant: {broke}"); failed += 1
+                last = now
         finally:
             stop(out)
     print("All passed." if not failed else f"{failed} failed.")

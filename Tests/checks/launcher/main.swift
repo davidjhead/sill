@@ -145,6 +145,9 @@ do {
     else { check(false, "the second of Recent is the Desktop") }
     check(LauncherModel.make(i, query: "a").apps.first?.name == "app Store", "a search in Recent looks through every app")
     check(LauncherModel.make(i, query: "desk").recent.map(\.name) == ["Desktop"], "a search narrows Recent's list too")
+    i.favourites = ["com.apple.iCal", "com.apple.Notes"]   // Calendar never used from here
+    check(LauncherModel.make(i).favourites.map(\.name) == ["Calendar", "Notes"], "the favourites stay in Recent, used or not: \(LauncherModel.make(i).favourites.map(\.name))")
+    i.favourites = []
     check(LauncherModel.recentKey(.window(7)) == "desktop:7" && LauncherModel.recentKey(.desktop) == "desktop", "a display's Desktop has a key of its own")
     i.appOrder = .name
     check(LauncherModel.make(i).apps.map(\.name).first == "app Store", "A to Z ignores when apps were used")
