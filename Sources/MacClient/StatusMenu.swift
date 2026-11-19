@@ -16,9 +16,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     init(app: AppDelegate) {
         self.app = app
         super.init()
-        let image = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: "Sill Viewer")
-        image?.isTemplate = true
-        item.button?.image = image
+        item.button?.image = ViewerGlyph.image()   // the app icon as a template (design/ViewerIcon.svg)
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false

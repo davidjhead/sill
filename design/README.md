@@ -24,7 +24,8 @@
   icon with a MacBook in front of the iMac where the iPad is, on the same grid
   with the same four groups (background, iMac, MacBook, window).
   `Scripts/make-client-app.sh` compiles it as `make-app.sh` compiles Sill's,
-  cached in `.build/viewer-icon`.
+  cached in `.build/viewer-icon`. Its menu bar glyph is drawn in code from the
+  same geometry (`Sources/MacClient/ViewerGlyph.swift`), as Sill's is.
 - `DMGBackground.svg` — the window of Sill.dmg, the Mac download: 660 x 400
   points of white, an arrow from where Sill.app sits (170, 180) to
   Applications (490, 180) in the app icon's greys, and "To install Sill, drag
