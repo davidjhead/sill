@@ -21,15 +21,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         client.picksDesktopItself = false   // the user's windows to open; the Desktop once, on connecting
+        #if DEBUG
+        AgentHarness.start(self)   // -SillAgent <folder>: an agent drives the app headless (AgentHarness)
+        #endif
         reporter.attach(to: client)
         mainMenu.install()
-        status = StatusMenu(app: self)
+        if !Self.agent { status = StatusMenu(app: self) }
         clipboardSync = ClipboardSync(client: client)
         let audio = self.audio
         client.onAudio = { if AudioPlayer.enabled { audio.receive($0) } }
         client.$connected.removeDuplicates().sink { [weak self] connected in
             DispatchQueue.main.async { self?.connectedChanged(connected) }
         }.store(in: &subscriptions)
+        // A Mac without an ID (no identity yet, a test host) is remembered by its name, which comes with
+        // its first window list, after the session is up.
+        client.$macName.removeDuplicates().sink { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self, self.client.connected else { return }
+                LauncherMemory.shared.use(mac: self.launcherMemoryKey)
+            }
+        }.store(in: &subscriptions)
+        #if DEBUG
+        if Self.agent {   // the harness's test host alone: no Bonjour, no saved Macs, no reconnect
+            client.connectFromLaunchArgument()
+            return
+        }
+        #endif
         client.startBrowsing()
         client.startRemote()
         #if DEBUG
@@ -51,6 +68,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The saved Mac (its Mac ID) this app was connected to when it last quit, reconnected to at
     /// launch; forgotten by Disconnect, so a Mac left on purpose stays left.
     private static let lastMacKey = "SillClient.lastMac"
+
+    #if DEBUG
+    private static var agent: Bool { AgentHarness.enabled }
+    #else
+    private static let agent = false
+    #endif
     /// How long a launch's reconnect has before the connect window shows (the reconnect itself goes
     /// on, DiscoveryPolicy.redialWindow).
     private static let reconnectPatience: TimeInterval = 15
@@ -87,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if connected {
             if let mac = client.session?.macID { UserDefaults.standard.set(mac, forKey: Self.lastMacKey) }
-            LauncherMemory.shared.use(mac: client.session?.macID)   // the launcher's favourites and recents of this Mac
+            LauncherMemory.shared.use(mac: launcherMemoryKey)   // the launcher's favourites and recents of this Mac
             connectWindow?.orderOut(nil)
             // The launcher's window comes in front of every other window, so something can be picked
             // from all the other Mac offers (its apps, windows, Desktops and settings); the windows
@@ -133,6 +156,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             windows.closeAll()
             showConnectWindow()
         }
+    }
+
+    /// Whose favourites and recents the launcher shows: the session's Mac by its ID, else by its name.
+    private var launcherMemoryKey: String? {
+        if let id = client.session?.macID { return id }
+        return client.macName.isEmpty ? nil : "name:" + client.macName
     }
 
     func showConnectWindow() {

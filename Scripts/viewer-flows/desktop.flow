@@ -1,0 +1,6 @@
+# The Desktop from the sidebar: a stream window opens and the host streams the test pattern.
+wait apps 30
+click 75 234
+wait stream 15
+expect active == desktop
+expect streamWindows > 0

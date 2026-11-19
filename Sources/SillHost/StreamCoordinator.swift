@@ -1247,7 +1247,9 @@ package final class StreamCoordinator {
         case .launchApp:
             guard let req = Wire.decode(LaunchApp.self, from: message.payload),
                   let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: req.bundleID) else { return }
-            gestureChords.forget()              // the app comes forward, which closes a view a gesture opened
+            // A synthetic host opens nothing on its Mac, as it posts no input (a test, an agent's harness).
+            guard !synthetic else { print("Test launch: \(req.bundleID) (not opened: a test host)"); return }
+            gestureChords.forget()             // the app comes forward, which closes a view a gesture opened
             pendingLaunch = req.bundleID
             let config = NSWorkspace.OpenConfiguration()
             // The launch itself takes no focus on the Mac. Its first window is then picked for the

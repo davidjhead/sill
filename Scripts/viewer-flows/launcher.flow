@@ -1,0 +1,36 @@
+# The launcher on connecting: sort, sidebar, search, Escape, favourites. Points are the launcher's
+# default 920×660 window (the harness's defaults are fresh each run), top-left origin.
+wait apps 30
+expect launcher.shown == true
+expect counts.apps > 0
+expect launcher.desktops.0.name == Desktop
+expect launcher.appOrder == name
+# All Apps' sort switch
+click 867 171
+expect launcher.appOrder == recent
+click 813 171
+expect launcher.appOrder == name
+# The sidebar: its button beside the title, ⌃⌘S, and the button left of the search while hidden
+click 244 34
+expect launcher.sidebarHidden == true
+snap launcher-sidebar-hidden.png
+click 472 34
+expect launcher.sidebarHidden == false
+key ctrl-cmd-s
+expect launcher.sidebarHidden == true
+key ctrl-cmd-s
+expect launcher.sidebarHidden == false
+# A right-click adds an app to the favourites (Calculator: second row, last column, A to Z)
+rightclick 853 326
+choose Add to Favourites
+expect launcher.favourites contains Calculator
+snap launcher-favourite.png
+# Search, then Return opens the first app (the test host logs it and opens nothing); Escape closes
+click 760 34
+type calc
+snap launcher-search.png
+key return
+key esc
+expect launcher.shown == false
+launcher show
+expect launcher.shown == true

@@ -1,0 +1,13 @@
+# Connecting to a Mac whose screen is locked: no apps or windows come until it is unlocked, and the
+# launcher says why instead of looking empty.
+start-flags --locked
+wait connected 20
+wait launcher 10
+expect locked == screenLocked
+expect counts.apps == 0
+snap locked.png
+unlock
+wait apps 20
+expect locked != screenLocked
+expect counts.apps > 0
+snap unlocked.png

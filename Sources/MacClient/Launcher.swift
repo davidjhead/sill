@@ -31,15 +31,15 @@ final class Launcher: NSObject, NSWindowDelegate {
         window.title = app.client.macName   // for the Window menu and Mission Control; the sidebar shows it
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.toolbar = NSToolbar(identifier: "SillLauncher")   // empty: a taller bar puts its buttons inside the sidebar
-        window.toolbarStyle = .unified
         window.appearance = NSAppearance(named: .darkAqua)   // the launcher is dark always (LauncherView)
         window.contentMinSize = NSSize(width: 640, height: 440)
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
         window.delegate = self
         window.onCancel = { [weak self] in self?.hide() }
-        window.contentView = NSHostingView(rootView: LiveLauncher(client: app.client, launcher: self))
+        let content = FirstClickHostingView(rootView: LiveLauncher(client: app.client, launcher: self))
+        content.sizingOptions = []   // the window keeps the size it is given (contentMinSize), whatever the page shows
+        window.contentView = content
         window.center()
         window.setFrameAutosaveName("SillLauncher")   // after center(): a saved frame wins
         self.window = window
@@ -93,7 +93,31 @@ final class Launcher: NSObject, NSWindowDelegate {
             })
     }
 
-    fileprivate var openSources: Set<StreamSource> { app.windows.openSources }
+    /// The sidebar's line under the Mac's name: the lock first, else the frame rate while a stream runs.
+    static func status(_ client: StreamClient) -> String {
+        switch client.lockView ? nil : client.lockWhy {
+        case .screenLocked: return "Screen locked"
+        case .otherUser: return "Another user is on it"
+        case nil: return "Connected" + (client.linkStats.flatMap { $0.fps > 0 ? " · \($0.fps) fps" : nil } ?? "")
+        }
+    }
+
+    /// What the launcher shows of the session, as LauncherModel reads it (the agent harness reads it too).
+    var input: LauncherModel.Input {
+        let client = app.client, memory = LauncherMemory.shared
+        return LauncherModel.Input(windows: client.orderedWindows, apps: client.apps,
+                                   hostDisplays: client.hostDisplays,
+                                   desktopNames: client.hostDesktopDisplayNames,
+                                   desktopCurrent: client.hostDesktopDisplay,
+                                   open: app.windows.openSources,
+                                   favourites: memory.favourites, recents: memory.recents,
+                                   appOrder: memory.appOrder)
+    }
+
+    #if DEBUG
+    var windowForTest: NSWindow? { window }
+    var actionsForTest: LauncherActions { actions }
+    #endif
 }
 
 /// The launcher's view fed from the session: it redraws as the other Mac's lists, icons, pictures and
@@ -108,20 +132,15 @@ private struct LiveLauncher: View {
         let _ = ownSwitches
         let page = LauncherPage(
             macName: client.macName,
-            status: "Connected" + (client.linkStats.map { " · \($0.fps) fps" } ?? ""),
-            input: LauncherModel.Input(windows: client.orderedWindows, apps: client.apps,
-                                       hostDisplays: client.hostDisplays,
-                                       desktopNames: client.hostDesktopDisplayNames,
-                                       desktopCurrent: client.hostDesktopDisplay,
-                                       open: launcher.openSources,
-                                       favourites: memory.favourites, recents: memory.recents,
-                                       appOrder: memory.appOrder),
+            status: Launcher.status(client),
+            input: launcher.input,
             icons: client.icons,
             thumbnails: client.thumbnails,
             settings: LauncherPage.Settings(bitrate: client.settings.displayed?.bitrate,
                                             maxFPS: client.settings.displayed?.maxFPS,
                                             soundOn: AudioPlayer.enabled, soundAvailable: client.hostAudio,
-                                            captureOn: SystemKeyTap.shared.enabled))
+                                            captureOn: SystemKeyTap.shared.enabled),
+            locked: client.lockView ? nil : client.lockWhy)
         var actions = launcher.actions
         let sound = actions.toggleSound, capture = actions.toggleCapture
         actions.toggleSound = { sound(); ownSwitches += 1 }
@@ -131,6 +150,13 @@ private struct LiveLauncher: View {
             .onChange(of: page.macName + "\n" + page.status) { launcher.setTitle(page.macName, subtitle: page.status) }
             .onChange(of: client.connected) { _, connected in if !connected { launcher.hide() } }
     }
+}
+
+/// The launcher's view takes the first click while its window is behind another app's: a click on an app
+/// opens it at once, as Launchpad's does, rather than only bringing the window forward.
+private final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
 }
 
 /// The launcher's window: Escape closes it, as Command-W does.

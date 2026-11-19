@@ -22,6 +22,9 @@ struct LauncherPage {
     var icons: [String: NSImage] = [:]            // by bundle ID
     var thumbnails: [UInt32: NSImage] = [:]       // by window ID
     var settings = Settings()
+    /// Why the other Mac shows nothing of itself (its screen locked, another user on it): its apps,
+    /// windows and icons are withheld until it is back, and the launcher says so in their place.
+    var locked: LockedMac.Why? = nil
 }
 
 /// What the launcher's buttons do. The launcher's window stays open after a choice (Launcher).
@@ -68,7 +71,7 @@ struct LauncherView: View {
             }
             content(model)
         }
-        .padding(10)
+        .padding(6)   // close enough to the window's corner that its buttons sit inside the sidebar's
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()   // under the see-through title bar: its buttons sit over the sidebar
         .background(Backdrop())
@@ -86,7 +89,7 @@ struct LauncherView: View {
 
     private func sidebar(_ model: LauncherModel) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            macHeader.padding(.top, 44).padding(.bottom, 12)
+            macHeader.padding(.top, 36).padding(.bottom, 12)
             paneRow(.home, "Home", "house")
             paneRow(.favourites, "Favourites", "star")
             paneRow(.apps, "All Apps", "square.grid.2x2")
@@ -107,7 +110,7 @@ struct LauncherView: View {
         .padding(.horizontal, 10).padding(.bottom, 10)
         .frame(width: 210)
         .frame(maxHeight: .infinity)
-        .background(Glass(cornerRadius: 16, fill: 0.10, stroke: 0.16).shadow(color: .black.opacity(0.25), radius: 15, y: 10))
+        .background(Glass(cornerRadius: 14, fill: 0.10, stroke: 0.16).shadow(color: .black.opacity(0.25), radius: 15, y: 10))
     }
 
     private var macHeader: some View {
@@ -119,7 +122,7 @@ struct LauncherView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(page.macName).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                 HStack(spacing: 5) {
-                    Circle().fill(Color(red: 0.3, green: 0.85, blue: 0.39)).frame(width: 6, height: 6)
+                    Circle().fill(page.locked == nil ? Color(red: 0.3, green: 0.85, blue: 0.39) : Color(red: 1, green: 0.62, blue: 0.2)).frame(width: 6, height: 6)
                     Text(page.status).font(.system(size: 11)).foregroundStyle(.white.opacity(0.72)).lineLimit(1)
                 }
             }
@@ -223,7 +226,10 @@ struct LauncherView: View {
     private func content(_ model: LauncherModel) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             topBar
-            if model.isEmpty && (pane != .favourites || !query.isEmpty) {
+            if let why = page.locked {
+                lockedCard(why)
+                Spacer(minLength: 0)
+            } else if model.isEmpty && (pane != .favourites || !query.isEmpty) {
                 emptyState
             } else {
                 ScrollView(.vertical) {
@@ -244,7 +250,7 @@ struct LauncherView: View {
                 .scrollIndicators(.automatic)
             }
         }
-        .padding(.leading, sidebarHidden ? 4 : 2).padding(.trailing, 10).padding(.top, 6)
+        .padding(.leading, sidebarHidden ? 4 : 2).padding(.trailing, 14).padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -334,6 +340,28 @@ struct LauncherView: View {
             .frame(width: 30, height: 26)
             .background(Capsule().fill(.white.opacity(on ? 0.22 : 0)))
             .contentShape(Capsule())
+    }
+
+    /// A locked Mac, in place of every section: that its apps and windows come back with the unlock, or,
+    /// for another user on it, what the iPhone's drawer says (LockedMac.line).
+    private func lockedCard(_ why: LockedMac.Why) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: why == .otherUser ? "person.2.fill" : "lock.fill")
+                .font(.system(size: 22)).frame(width: 30)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(why == .otherUser ? "Another user is on \(page.macName)" : "\(page.macName) is locked")
+                    .font(.system(size: 15, weight: .semibold))
+                Text(why == .otherUser ? LockedMac.line(mac: page.macName, why: why)
+                                       : "Unlock it to see its apps and windows here.")
+                    .font(.system(size: 13)).foregroundStyle(.white.opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(18)
+        .background(Glass(cornerRadius: 16, fill: 0.12, stroke: 0.18))
+        .accessibilityElement(children: .combine)
     }
 
     private var emptyState: some View {

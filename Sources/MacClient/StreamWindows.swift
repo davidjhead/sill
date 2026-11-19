@@ -254,6 +254,9 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         if let window = open[source] {
             if window.isMiniaturized { window.deminiaturize(nil) }
             if focus { window.makeKeyAndOrderFront(nil); NSApp.activate() } else { window.orderFront(nil) }
+            #if DEBUG
+            if focus, AgentHarness.enabled { flipTest(to: source) }
+            #endif
             return
         }
         let window = StreamWindow(source: source, size: initialSize(source))
@@ -286,6 +289,11 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         if focus {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate()
+            #if DEBUG
+            // The agent harness's app is never in front, so no window of it becomes key: what becoming key
+            // does (the pick) is done here, as -SillFlipTest does it.
+            if AgentHarness.enabled { flipTest(to: source) }
+            #endif
         } else {
             window.orderFront(nil)
             requestSideStreams()
