@@ -189,7 +189,7 @@ def run(out, flows):
                     failed += not ok
                     continue
                 words = line.split()
-                if words[0] == "snap" and len(words) > 1 and not os.path.isabs(words[1]):
+                if words[0] in ("snap", "dockicon") and len(words) > 1 and not os.path.isabs(words[1]):
                     words[1] = os.path.join(os.path.abspath(out), words[1]); line = " ".join(words)
                 if last is None: last = send(out, "state")
                 answer = send(out, line)

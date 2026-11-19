@@ -25,6 +25,7 @@ import StreamProtocol
 ///   launcher show|hide
 ///   snap <path> [launcher|key|all]
 ///   wait <what> [seconds] connected | apps | windows | launcher | stream (default 10 s)
+///   dockicon <path>       the Desktop's Dock icon as a PNG
 ///   fakemacs              sample Mac rows for the welcome page and the switcher
 ///   quit
 enum AgentHarness {
@@ -196,6 +197,14 @@ enum AgentHarness {
                 FoundMac(name: "Mac mini", endpoint: nil, route: .network, homeWord: .notPaired),
             ]
             settle { ok() }
+        case "dockicon":
+            // dockicon <path>: the Desktop's Dock icon, badged as the Dock shows it, as a PNG.
+            guard words.count >= 2 else { return fail("dockicon <path>") }
+            let image = DockProxies.badged(DockProxies.desktopIcon)
+            guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+                  let png = rep.representation(using: .png, properties: [:]),
+                  (try? png.write(to: URL(fileURLWithPath: words[1]))) != nil else { return fail("not written") }
+            ok(["written": [words[1]]])
         case "quit":
             ok()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { NSApp.terminate(nil) }
@@ -247,6 +256,7 @@ enum AgentHarness {
                 "recent": model.recent.map(\.name),
             ],
             "streamWindows": streams,
+            "dock": app.windows.dock.planned,
             "visibleWindows": NSApp.windows.filter(\.isVisible).map { $0.title.isEmpty ? String(describing: type(of: $0)) : $0.title },
         ]
     }

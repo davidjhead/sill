@@ -50,8 +50,22 @@ final class DockProxies {
     private var iconWritten: Set<String> = []
     private let work = DispatchQueue(label: "sill.dock", qos: .utility)
 
+    /// The Desktop's Dock icon, beside the apps': its windows are the Desktop windows open here (one per
+    /// display of a host that lists them, else the one), its icon `desktopIcon`. Window ID 0 stands for
+    /// the one Desktop, which has none.
+    static let desktopApp = "sill.desktop"
+
+    /// What the last sync asked for, by Dock icon name, whether or not Dock icons are on (the agent
+    /// harness reads it; its runs start none).
+    private(set) var planned: [String] = []
+
     static var enabled: Bool {
-        get { UserDefaults.standard.object(forKey: "SillClient.dockIcons") == nil || UserDefaults.standard.bool(forKey: "SillClient.dockIcons") }
+        get {
+            #if DEBUG
+            if AgentHarness.enabled { return false }   // a harness run puts nothing in this Mac's Dock
+            #endif
+            return UserDefaults.standard.object(forKey: "SillClient.dockIcons") == nil || UserDefaults.standard.bool(forKey: "SillClient.dockIcons")
+        }
         set { UserDefaults.standard.set(newValue, forKey: "SillClient.dockIcons") }
     }
 
@@ -93,6 +107,7 @@ final class DockProxies {
 
     /// The remote apps with a window open here now, by bundle ID.
     func sync(_ apps: [String: AppWindows]) {
+        planned = apps.values.map(\.name).sorted()
         let wanted = Self.enabled ? apps : [:]
         for app in Set(last.keys).subtracting(wanted.keys) { quit(app) }
         last = wanted
@@ -308,6 +323,25 @@ final class DockProxies {
 
     /// The remote app's icon with Sill Viewer's own in its lower right corner, so its Dock icon reads
     /// as the other Mac's app, not this Mac's.
+    /// The Desktop's own icon: a display on the launcher's blue-to-purple, in macOS's icon shape. Badged
+    /// with Sill Viewer's corner like the apps' (`badged`), where it is shown.
+    static let desktopIcon: NSImage = NSImage(size: NSSize(width: 512, height: 512), flipped: false) { rect in
+        let tile = rect.insetBy(dx: 50, dy: 50)
+        let shape = NSBezierPath(roundedRect: tile, xRadius: 92, yRadius: 92)
+        NSGradient(colors: [NSColor(red: 0.24, green: 0.43, blue: 0.69, alpha: 1), NSColor(red: 0.42, green: 0.29, blue: 0.55, alpha: 1)])?
+            .draw(in: shape, angle: -45)
+        // The display: a white bezel round a lighter screen, on a stand.
+        let screen = NSRect(x: tile.minX + 72, y: tile.minY + 150, width: tile.width - 144, height: tile.height - 250)
+        NSColor.white.setFill()
+        NSBezierPath(roundedRect: screen.insetBy(dx: -14, dy: -14), xRadius: 26, yRadius: 26).fill()
+        NSGradient(colors: [NSColor(red: 0.36, green: 0.58, blue: 0.86, alpha: 1), NSColor(red: 0.55, green: 0.42, blue: 0.75, alpha: 1)])?
+            .draw(in: NSBezierPath(roundedRect: screen, xRadius: 14, yRadius: 14), angle: -45)
+        NSColor.white.setFill()
+        NSBezierPath(rect: NSRect(x: rect.midX - 22, y: screen.minY - 64, width: 44, height: 52)).fill()
+        NSBezierPath(roundedRect: NSRect(x: rect.midX - 80, y: screen.minY - 76, width: 160, height: 18), xRadius: 9, yRadius: 9).fill()
+        return true
+    }
+
     static func badged(_ icon: NSImage) -> NSImage {
         let side = 512
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8,

@@ -1,6 +1,9 @@
-# The Desktop from the sidebar: a stream window opens and the host streams the test pattern.
+# The Desktop from the sidebar: a stream window opens, the host streams the test pattern, and the
+# Desktop has a Dock icon of its own (what the Viewer would show: a harness run puts none in the Dock).
 wait apps 30
 click 75 242
 wait stream 15
 expect active == desktop
 expect streamWindows > 0
+expect dock contains Desktop
+dockicon desktop-dock-icon.png

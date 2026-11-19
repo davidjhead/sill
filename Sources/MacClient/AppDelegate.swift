@@ -46,6 +46,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         #endif
+        // Switched to (⌘Tab, the app switcher, Mission Control's app), Sill Viewer shows its launcher, as a
+        // click on its Dock icon does (`applicationShouldHandleReopen`). Not when what brought it forward
+        // is one of its windows clicked (a mouse press is the event then), or one of the other Mac's apps'
+        // Dock icons, which bring that app's windows forward instead (StreamWindows.dockAskedAt; the icon's
+        // request can arrive just after the activation, so this looks a moment later).
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            let event = NSApp.currentEvent?.type
+            let clicks: [NSEvent.EventType] = [.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp]
+            guard !clicks.contains(where: { $0 == event }) else { return }
+            let at = Date()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                guard let self, NSApp.isActive, self.windows.dockAskedAt < at.addingTimeInterval(-0.5) else { return }
+                self.launcher.show()
+            }
+        }
         client.startBrowsing()
         client.startRemote()
         #if DEBUG

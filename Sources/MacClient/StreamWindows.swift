@@ -126,7 +126,10 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         dock.onClose = { [weak self] app in
             guard let self else { return }
             for (source, window) in self.open {
-                if case .window(let id) = source, self.appOf[id] == app { window.close() }
+                if app == DockProxies.desktopApp ? (source == .desktop || self.display(of: source) != nil)
+                                                 : { if case .window(let id) = source { return self.appOf[id] == app }; return false }() {
+                    window.close()
+                }
             }
         }
         client.onDragOffer = { [weak self] offer in self?.input.dragOffer = offer.files.isEmpty ? nil : offer }
@@ -250,6 +253,7 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     /// asks the host for its stream.
     func open(_ source: StreamSource, focus: Bool = true) {
         windowLog("open \(source) focus \(focus) (already open: \(open[source] != nil))")
+        if focus { dockAskedAt = Date() }   // a window brought forward here: Sill Viewer's activation is for it
         guard source != .none else { return }
         if let window = open[source] {
             if window.isMiniaturized { window.deminiaturize(nil) }
@@ -356,6 +360,16 @@ final class StreamWindows: NSObject, NSWindowDelegate {
             byApp[app, default: []].append(DockProxies.Window(id: id, title: w.map { $0.title.isEmpty ? $0.appName : $0.title } ?? title(source),
                                                               state: state))
         }
+        // The Desktop's windows: its own Dock icon (DockProxies.desktopApp), with each display's in its menu.
+        let desktops: [DockProxies.Window] = open.compactMap { source, window in
+            guard source == .desktop || display(of: source) != nil else { return nil }
+            let id: UInt32 = { if case .window(let id) = source { return id }; return 0 }()
+            return DockProxies.Window(id: id, title: title(source), state: window.isMiniaturized ? .minimized : .other)
+        }
+        if !desktops.isEmpty {
+            apps[DockProxies.desktopApp] = DockProxies.AppWindows(name: "Desktop", icon: DockProxies.desktopIcon,
+                                                                  windows: desktops.sorted { $0.title < $1.title })
+        }
         for (app, windows) in byApp {
             // The window's app name, else the installed app's (a window of another Space can come
             // with none), never the bundle ID if either is known.
@@ -382,6 +396,15 @@ final class StreamWindows: NSObject, NSWindowDelegate {
 
     /// From a Dock icon: one window, or every window of the app (the most recent one key).
     private func focus(app: String, window: UInt32?) {
+        dockAskedAt = Date()
+        if app == DockProxies.desktopApp {
+            if let window { open(window == 0 ? .desktop : .window(window)); return }
+            let mine = NSApp.orderedWindows.compactMap { $0 as? StreamWindow }.filter { $0.source == .desktop || display(of: $0.source) != nil }
+            for w in mine.reversed() { if w.isMiniaturized { w.deminiaturize(nil) }; w.orderFront(nil) }
+            mine.first?.makeKeyAndOrderFront(nil)
+            NSApp.activate()
+            return
+        }
         if let window { open(.window(window)); return }
         let mine = NSApp.orderedWindows.compactMap { $0 as? StreamWindow }.filter {
             guard case .window(let id) = $0.source else { return false }
@@ -402,8 +425,23 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     /// A kept Dock icon clicked with none of its app's windows open here: its windows on the other
     /// Mac open here, or, with none there, the app is launched there (its first window then streams
     /// here, as an app opened from the status item does).
+    /// When a Dock icon of the other Mac's last asked for its windows, or a window was brought forward here
+    /// (from the launcher, the menu bar's menu): Sill Viewer coming forward then is for them, not for its
+    /// launcher (AppDelegate).
+    private(set) var dockAskedAt = Date.distantPast
+
     private func launchFromDock(_ app: String) {
+        dockAskedAt = Date()
         guard client.connected, known != nil else { dockLaunches.insert(app); return }
+        if app == DockProxies.desktopApp {
+            // The Desktop's icon kept in the Dock, clicked with no Desktop open: the Desktop (the main display's).
+            if let main = client.hostDisplays.first(where: { $0.main == true }) ?? client.hostDisplays.first {
+                open(.window(DesktopWindow.id(display: main.id)))
+            } else {
+                open(.desktop)
+            }
+            return
+        }
         dockLaunches.remove(app)
         // The Dock icon asks as it starts and as it becomes active: one answer.
         if let last = lastDockLaunch[app], Date().timeIntervalSince(last) < 3 { return }
