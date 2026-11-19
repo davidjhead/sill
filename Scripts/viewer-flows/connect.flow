@@ -1,0 +1,18 @@
+# Connect to a Mac lives in the launcher's window: the switcher on the Mac's name while connected, Add a
+# Mac as a page of the window, and the welcome page once the session ends.
+wait apps 30
+expect page == launcher
+fakemacs
+# The switcher (the Mac's name at the top of the sidebar) lists the Macs, Add a Mac… and Disconnect
+click 110 52
+choose Add a Mac
+expect page == addMac
+snap connect-add-mac.png
+key esc
+expect page == launcher
+click 110 52
+choose Disconnect
+expect connected == false
+expect page == welcome
+fakemacs
+snap connect-welcome.png

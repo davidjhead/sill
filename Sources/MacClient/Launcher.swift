@@ -16,9 +16,15 @@ final class Launcher: NSObject, NSWindowDelegate {
     init(app: AppDelegate) { self.app = app }
 
     var isShown: Bool { window?.isVisible == true }
+    /// Add a Mac's page, shown over either state (WelcomeView, the switcher's Add a Mac…).
+    let connectPage = ConnectPage()
+
+    /// What the window shows: the welcome page before a session, Add a Mac, or the launcher.
+    var page: String {
+        connectPage.showsAddMac(app.client) ? "addMac" : app.client.connected ? "launcher" : "welcome"
+    }
 
     func show() {
-        guard app.client.connected else { return }
         if let window {
             NSApp.activate()
             window.makeKeyAndOrderFront(nil)
@@ -28,7 +34,7 @@ final class Launcher: NSObject, NSWindowDelegate {
         let window = LauncherWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 660),
                                     styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                     backing: .buffered, defer: false)
-        window.title = app.client.macName   // for the Window menu and Mission Control; the sidebar shows it
+        window.title = app.client.connected ? app.client.macName : "Sill Viewer"   // for the Window menu and Mission Control
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.appearance = NSAppearance(named: .darkAqua)   // the launcher is dark always (LauncherView)
@@ -37,7 +43,7 @@ final class Launcher: NSObject, NSWindowDelegate {
         window.tabbingMode = .disallowed
         window.delegate = self
         window.onCancel = { [weak self] in self?.hide() }
-        let content = FirstClickHostingView(rootView: LiveLauncher(client: app.client, launcher: self))
+        let content = FirstClickHostingView(rootView: LiveLauncher(client: app.client, connectPage: connectPage, launcher: self))
         content.sizingOptions = []   // the window keeps the size it is given (contentMinSize), whatever the page shows
         window.contentView = content
         window.center()
@@ -87,10 +93,22 @@ final class Launcher: NSObject, NSWindowDelegate {
                 self.app.windows.requestSideStreams()   // the host taps, or gives the apps their sound back
             },
             toggleCapture: { SystemKeyTap.shared.enabled.toggle() },
-            disconnect: { [weak self] in
-                self?.hide()
-                self?.app.disconnect()
-            })
+            disconnect: { [weak self] in self?.app.disconnect() },   // the window stays, on the welcome page
+            switchMac: { [weak self] id in
+                guard let self, let mac = self.app.client.macs.first(where: { $0.id == id }) else { return }
+                self.app.client.connect(to: mac)
+            },
+            addMac: { [weak self] in
+                guard let self else { return }
+                self.connectPage.startAdding(self.app.client)
+            },
+            searchNearby: { [weak self] in self?.app.client.searchNearby() })
+    }
+
+    /// Whether a listed Mac is the session's: by its saved ID, else by its name.
+    static func isCurrent(_ mac: FoundMac, _ client: StreamClient) -> Bool {
+        if let id = mac.macID, let current = client.session?.macID { return id == current }
+        return mac.name == client.macName
     }
 
     /// The sidebar's line under the Mac's name: the lock first, else the frame rate while a stream runs.
@@ -125,10 +143,20 @@ final class Launcher: NSObject, NSWindowDelegate {
 private struct LiveLauncher: View {
     @ObservedObject var client: StreamClient
     @ObservedObject var memory = LauncherMemory.shared
+    @ObservedObject var connectPage: ConnectPage
     let launcher: Launcher
     @State private var ownSwitches = 0
 
     var body: some View {
+        if client.connected && !launcher.connectPage.showsAddMac(client) {
+            launcherView
+        } else {
+            WelcomeView(client: client, page: launcher.connectPage)
+                .onAppear { launcher.setTitle("Sill Viewer", subtitle: "") }
+        }
+    }
+
+    private var launcherView: some View {
         let _ = ownSwitches
         let page = LauncherPage(
             macName: client.macName,
@@ -140,7 +168,9 @@ private struct LiveLauncher: View {
                                             maxFPS: client.settings.displayed?.maxFPS,
                                             soundOn: AudioPlayer.enabled, soundAvailable: client.hostAudio,
                                             captureOn: SystemKeyTap.shared.enabled),
-            locked: client.lockView ? nil : client.lockWhy)
+            locked: client.lockView ? nil : client.lockWhy,
+            macs: client.macs.map { LauncherPage.MacRow(id: $0.id, name: $0.name, word: $0.word, current: Launcher.isCurrent($0, client)) },
+            showsNearby: client.showsNearbyHint && !client.searchingNearby)
         var actions = launcher.actions
         let sound = actions.toggleSound, capture = actions.toggleCapture
         actions.toggleSound = { sound(); ownSwitches += 1 }
@@ -148,7 +178,6 @@ private struct LiveLauncher: View {
         return LauncherView(page: page, actions: actions)
             .onAppear { launcher.setTitle(page.macName, subtitle: page.status) }
             .onChange(of: page.macName + "\n" + page.status) { launcher.setTitle(page.macName, subtitle: page.status) }
-            .onChange(of: client.connected) { _, connected in if !connected { launcher.hide() } }
     }
 }
 

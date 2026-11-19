@@ -25,6 +25,16 @@ struct LauncherPage {
     /// Why the other Mac shows nothing of itself (its screen locked, another user on it): its apps,
     /// windows and icons are withheld until it is back, and the launcher says so in their place.
     var locked: LockedMac.Why? = nil
+    /// The Macs this one can reach (the network's and the saved ones), for the switcher on the Mac's name.
+    var macs: [MacRow] = []
+    var showsNearby = false
+
+    struct MacRow: Equatable {
+        var id: String          // FoundMac.id
+        var name: String
+        var word: String?       // Wired, Wi-Fi, Remote, Not paired…
+        var current: Bool
+    }
 }
 
 /// What the launcher's buttons do. The launcher's window stays open after a choice (Launcher).
@@ -38,6 +48,9 @@ struct LauncherActions {
     var toggleSound: () -> Void = {}
     var toggleCapture: () -> Void = {}
     var disconnect: () -> Void = {}
+    var switchMac: (String) -> Void = { _ in }   // a MacRow's id
+    var addMac: () -> Void = {}
+    var searchNearby: () -> Void = {}
 }
 
 /// The launcher's page, from the "glass sidebar" design (the Sidebar and Glass options together): dark
@@ -89,7 +102,7 @@ struct LauncherView: View {
 
     private func sidebar(_ model: LauncherModel) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            macHeader.padding(.top, 36).padding(.bottom, 12)
+            macHeader.padding(.top, 32).padding(.bottom, 12)
             paneRow(.home, "Home", "house")
             paneRow(.favourites, "Favourites", "star")
             paneRow(.apps, "All Apps", "square.grid.2x2")
@@ -113,22 +126,48 @@ struct LauncherView: View {
         .background(Glass(cornerRadius: 14, fill: 0.10, stroke: 0.16).shadow(color: .black.opacity(0.25), radius: 15, y: 10))
     }
 
+    /// The Mac and its link, and a menu of the other Macs on a click: connect to another, add one,
+    /// search nearby, or disconnect (the welcome page is where a session starts; this is for changing it).
     private var macHeader: some View {
-        HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.18))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.25)))
-                .overlay(Image(systemName: "desktopcomputer").font(.system(size: 16)))
-                .frame(width: 34, height: 34)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(page.macName).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                HStack(spacing: 5) {
-                    Circle().fill(page.locked == nil ? Color(red: 0.3, green: 0.85, blue: 0.39) : Color(red: 1, green: 0.62, blue: 0.2)).frame(width: 6, height: 6)
-                    Text(page.status).font(.system(size: 11)).foregroundStyle(.white.opacity(0.72)).lineLimit(1)
+        Menu {
+            if !page.macs.isEmpty {
+                Section("Connect to") {
+                    ForEach(page.macs, id: \.id) { m in
+                        Button { if !m.current { actions.switchMac(m.id) } } label: {
+                            let title = m.name + (m.word.map { " — \($0)" } ?? "")
+                            if m.current { Label(title, systemImage: "checkmark") } else { Text(title) }
+                        }
+                    }
                 }
+                Divider()
             }
+            Button("Add a Mac…", action: actions.addMac)
+            if page.showsNearby { Button("Search Nearby", action: actions.searchNearby) }
+            Divider()
+            Button("Disconnect from \(page.macName)", action: actions.disconnect)
+        } label: {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.18))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.25)))
+                    .overlay(Image(systemName: "desktopcomputer").font(.system(size: 16)))
+                    .frame(width: 34, height: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(page.macName).font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                    HStack(spacing: 5) {
+                        Circle().fill(page.locked == nil ? Color(red: 0.3, green: 0.85, blue: 0.39) : Color(red: 1, green: 0.62, blue: 0.2)).frame(width: 6, height: 6)
+                        Text(page.status).font(.system(size: 11)).foregroundStyle(.white.opacity(0.72)).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.8))
+            }
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .background(Glass(cornerRadius: 11, fill: 0.14, stroke: 0.2))
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 8)
-        .accessibilityElement(children: .combine)
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+        .help("Connect to another Mac, add one, or disconnect")
+        .accessibilityLabel("\(page.macName), \(page.status). Other Macs")
     }
 
     private func paneRow(_ p: Pane, _ title: String, _ symbol: String) -> some View {
@@ -582,7 +621,7 @@ private struct AppMenu: ViewModifier {
 }
 
 /// The launcher's backdrop: two big soft glows on deep blue, a wallpaper seen through frosted glass.
-private struct Backdrop: View {
+struct Backdrop: View {
     var body: some View {
         GeometryReader { g in
             ZStack {
@@ -606,7 +645,7 @@ private struct Backdrop: View {
 }
 
 /// A frosted panel: a faint white fill with a hairline edge.
-private struct Glass: View {
+struct Glass: View {
     var cornerRadius: CGFloat
     var fill: Double
     var stroke: Double
@@ -627,7 +666,7 @@ private struct SidebarHighlight: View {
 }
 
 /// A tile that brightens under the pointer and dims while pressed.
-private struct LauncherTileStyle: ButtonStyle {
+struct LauncherTileStyle: ButtonStyle {
     var padding: CGFloat = 6
 
     func makeBody(configuration: Configuration) -> some View {

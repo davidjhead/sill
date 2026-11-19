@@ -5,7 +5,7 @@ import StreamProtocol
 
 /// The app: one StreamClient (the iPhone and iPad app's session, shared), the other Mac's windows as
 /// this Mac's windows (StreamWindows), the controlled app's menus in the menu bar (MainMenu), and
-/// Sill's own controls in a status item (StatusMenu). The connect window shows while no session is
+/// Sill's own controls in a status item (StatusMenu). The launcher's window shows its welcome page while no session is
 /// up, and from the status item.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let client = StreamClient()
@@ -16,7 +16,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var launcher = Launcher(app: self)
     private var clipboardSync: ClipboardSync?
     let audio = AudioPlayer()
-    private var connectWindow: NSWindow?
     private var subscriptions = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -54,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         if let last = UserDefaults.standard.string(forKey: Self.lastMacKey), !client.connected, client.reconnectAtLaunch(last) {
             // Back to the Mac it was connected to when it quit, without a window in the way (it may be
-            // a launch at login); the connect window only if that has not worked after a while.
+            // a launch at login); the welcome page only if that has not worked after a while.
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.reconnectPatience) { [weak self] in
                 guard let self, !self.client.connected else { return }
                 self.showConnectWindow()
@@ -74,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #else
     private static let agent = false
     #endif
-    /// How long a launch's reconnect has before the connect window shows (the reconnect itself goes
+    /// How long a launch's reconnect has before the welcome page shows (the reconnect itself goes
     /// on, DiscoveryPolicy.redialWindow).
     private static let reconnectPatience: TimeInterval = 15
 
@@ -87,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// A click on the Dock icon, or opening the app again from Finder: while a session is up, the launcher's
     /// window (everything the other Mac offers to open) comes forward, whatever windows are open; with
-    /// none, the connect window when no window shows.
+    /// none, the welcome page when no window shows.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if client.connected {
             launcher.show()
@@ -97,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    /// sill://pair from Messages or a browser: a confirmation first, in the connect window.
+    /// sill://pair from Messages or a browser: a confirmation first, on the welcome page's Add a Mac.
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls { client.handleOpenURL(url) }
         showConnectWindow()
@@ -111,7 +110,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if connected {
             if let mac = client.session?.macID { UserDefaults.standard.set(mac, forKey: Self.lastMacKey) }
             LauncherMemory.shared.use(mac: launcherMemoryKey)   // the launcher's favourites and recents of this Mac
-            connectWindow?.orderOut(nil)
             // The launcher's window comes in front of every other window, so something can be picked
             // from all the other Mac offers (its apps, windows, Desktops and settings); the windows
             // open last time with this Mac come back behind it (StreamWindows), and once they have,
@@ -164,18 +162,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return client.macName.isEmpty ? nil : "name:" + client.macName
     }
 
-    func showConnectWindow() {
-        if connectWindow == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: ConnectView(client: client)))
-            window.title = "Connect to a Mac"
-            window.setContentSize(NSSize(width: 560, height: 520))
-            window.isReleasedWhenClosed = false
-            window.center()
-            connectWindow = window
-        }
-        connectWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate()
-    }
+    /// The welcome page (no session) or the launcher, in the one window: Connect to a Mac lives there.
+    func showConnectWindow() { launcher.show() }
 
     func disconnect() {
         UserDefaults.standard.removeObject(forKey: Self.lastMacKey)

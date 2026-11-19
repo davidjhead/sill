@@ -596,9 +596,11 @@ defaults write me.saffer.sill.client SillTiming -bool YES   # each window's pick
 Scripts/viewer_agent.py run /tmp/flows Scripts/viewer-flows/*.flow   # the launcher's flows, headless, against a test host on this Mac
 ```
 
-- **Connect** from the menu bar icon: a Mac on the same network is listed, and a tap asks to pair
-  (type the code the other Mac shows). Away from home (Tailscale) turn Remote Access on in Sill.app
-  and use Add a Mac with the address and code from its Pair iPhone or iPad… window.
+- **Connect** on the welcome page (the window Sill Viewer opens with, until a session is up): each Mac
+  on the same network is a card, and a click on one marked Not paired asks for the code the other Mac
+  shows. Away from home (Tailscale) turn Remote Access on in Sill.app and use the Add a Mac card with
+  the address and code from its Pair iPhone or iPad… window. While connected, the Mac's name at the
+  top of the launcher's sidebar switches to another Mac, adds one or disconnects.
 - **Windows**: pick one from the icon's menu, or an app (all its windows). Each opens as a window
   here; the pill above the focused one has this Mac's close, minimize and full screen. On the host
   each lives on a hidden display of its own while it is shown ("Sill's desk"), and goes back when

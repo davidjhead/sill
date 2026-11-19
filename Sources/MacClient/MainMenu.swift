@@ -3,7 +3,7 @@ import StreamProtocol
 
 /// The menu bar: this app's own menu first (macOS requires it), then, while one of the other Mac's
 /// windows is key, that app's menus as the other Mac has them, read as each opens (MacMenus). While
-/// the connect window is key, Edit instead, so its fields can paste. Sill's controls are the status
+/// the launcher's window is key, Edit instead, so its fields (search, Add a Mac) can paste. Sill's controls are the status
 /// item's. Rebuilt when the key window changes and when the other Mac's top level changes
 /// (MacMenuHub). Main thread.
 final class MainMenu: NSObject {

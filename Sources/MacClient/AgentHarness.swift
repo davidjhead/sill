@@ -25,6 +25,7 @@ import StreamProtocol
 ///   launcher show|hide
 ///   snap <path> [launcher|key|all]
 ///   wait <what> [seconds] connected | apps | windows | launcher | stream (default 10 s)
+///   fakemacs              sample Mac rows for the welcome page and the switcher
 ///   quit
 enum AgentHarness {
     private static var folder: URL?
@@ -100,12 +101,10 @@ enum AgentHarness {
             let at = NSPoint(x: x, y: w.frame.height - y)
             mouse(w, .mouseMoved, at)
             if words[0] == "hover" { return settle { ok() } }
-            if words[0] == "click" {
-                mouse(w, .leftMouseDown, at); mouse(w, .leftMouseUp, at)
-                return settle { ok() }
-            }
-            // A right-click opens a menu, whose tracking holds the main thread until it closes: the answer
-            // (the menu's items) goes from inside it, and `choose` picks one, or `key esc` closes it.
+            // A click or a right-click may open a menu (a right-click's, a pop-up button's), whose tracking
+            // holds the main thread until it closes: the answer (the menu's items) goes from inside it, and
+            // `choose` picks one, or `key esc` closes it.
+            let right = words[0] == "rightclick"
             // The answer goes from the menu's own notification, inside its tracking (the main queue may not
             // run there); with no menu after the events, from here.
             openMenu = nil
@@ -119,16 +118,19 @@ enum AgentHarness {
                 ok(["menu": menu.items.map { $0.isSeparatorItem ? "—" : $0.title }])
             }
             DispatchQueue.main.async {
-                mouse(w, .rightMouseDown, at); mouse(w, .rightMouseUp, at)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if right { mouse(w, .rightMouseDown, at); mouse(w, .rightMouseUp, at) } else { mouse(w, .leftMouseDown, at); mouse(w, .leftMouseUp, at) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + (right ? 0.5 : 0.35)) {
                     guard !answered else { return }
                     answered = true
                     if let observer { NotificationCenter.default.removeObserver(observer) }
-                    fail("no menu opened at \(Int(x)), \(Int(y))")
+                    if right { fail("no menu opened at \(Int(x)), \(Int(y))") } else { ok() }
                 }
             }
         case "choose":
-            guard let menu = openMenu, let i = menu.items.firstIndex(where: { $0.title.caseInsensitiveCompare(rest) == .orderedSame }) else {
+            // The item by its title, else the first whose title starts so ("choose Disconnect").
+            guard let menu = openMenu,
+                  let i = menu.items.firstIndex(where: { $0.title.caseInsensitiveCompare(rest) == .orderedSame })
+                      ?? menu.items.firstIndex(where: { $0.title.lowercased().hasPrefix(rest.lowercased()) }) else {
                 return fail("no open menu has “\(rest)”")
             }
             openMenu = nil
@@ -184,6 +186,16 @@ enum AgentHarness {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: poll)
             }
             poll()
+        case "fakemacs":
+            // Sample rows for the welcome page and the switcher (the harness never browses): a wired Mac,
+            // one on Wi-Fi, a saved one away from home and one not paired. Picking one dials nothing real.
+            app.client.macs = [
+                FoundMac(name: "Studio", endpoint: nil, route: .network, method: .wired),
+                FoundMac(name: "MacBook Air", endpoint: nil, route: .network, method: .wifi),
+                FoundMac(name: "Office iMac", endpoint: nil, route: .remote, macID: "agent-office"),
+                FoundMac(name: "Mac mini", endpoint: nil, route: .network, homeWord: .notPaired),
+            ]
+            settle { ok() }
         case "quit":
             ok()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { NSApp.terminate(nil) }
@@ -217,6 +229,8 @@ enum AgentHarness {
         return [
             "connected": client.connected,
             "macName": client.macName,
+            "page": app.launcher.page,
+            "macs": client.macs.map(\.name),
             "locked": client.lockWhy.map { "\($0)" } ?? "",
             "macID": client.session?.macID ?? "",
             "active": "\(client.active)",
