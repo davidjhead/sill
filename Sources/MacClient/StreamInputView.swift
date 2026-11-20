@@ -136,7 +136,7 @@ final class StreamInputView: NSView {
     }
 
     override var acceptsFirstResponder: Bool { true }
-    /// Clicks go to the other Mac; the window moves by its pill (WindowPill) or a drag in the picture's title strip.
+    /// Clicks go to the other Mac; the window moves by its toolbar (WindowToolbar) or a drag in the picture's title strip.
     override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var isFlipped: Bool { true }

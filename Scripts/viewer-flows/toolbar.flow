@@ -1,0 +1,25 @@
+# A stream window's toolbar (WindowToolbar): ⌘ keys, gestures (a Desktop's), quality, refresh and the
+# launcher. ⌘ is the window's own Capture shortcuts: off at first, on and named ("Keys to …") from its
+# button, off again; the launcher's switch sets every open window. A harness window never has the
+# keyboard, so the tap itself is not made here (SystemKeyTap: only while the window's picture has it).
+wait apps 30
+click 75 242
+wait stream 15
+expect streamWindows.0.toolbar contains sill.keys
+expect streamWindows.0.toolbar contains sill.gestures
+expect streamWindows.0.toolbar contains sill.launcher
+expect streamWindows.0.keys == false
+toolbar keys
+expect streamWindows.0.keys == true
+expect streamWindows.0.keysTitle contains Keys to
+snap toolbar-keys-on.png all
+toolbar keys
+expect streamWindows.0.keys == false
+expect streamWindows.0.keysTitle !contains Keys to
+capture on
+expect streamWindows.0.keys == true
+capture off
+expect streamWindows.0.keys == false
+key esc
+toolbar launcher
+expect launcher.shown == true

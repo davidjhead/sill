@@ -36,7 +36,7 @@ Sill Viewer asks for each only when a feature needs it. Everything else works wi
 | Permission | When it is asked | What it is for | Without it |
 |---|---|---|---|
 | **Local Network** | At first launch | Finding your other Macs on the network | No Mac is listed; Add a Mac by address still works |
-| **Accessibility** | When you turn on Capture System Shortcuts (menu bar menu, or Capture shortcuts in the launcher) | ⌘Tab, ⌘Space and the other shortcuts macOS keeps for itself go to the other Mac | Those shortcuts stay on this Mac; every other key still goes across |
+| **Accessibility** | When you turn on a window's ⌘ keys button, or Capture System Shortcuts (menu bar menu, or Capture shortcuts in the launcher) | ⌘Tab, ⌘Space and the other shortcuts macOS keeps for itself go to the other Mac | Those shortcuts stay on this Mac; every other key still goes across |
 | **Paste from Other Apps** | The first time the other Mac's clipboard is shared | Sending what you copy here to the other Mac | Copies from the other Mac still arrive here; use **Allow Clipboard Access…** in the menu bar menu, which opens Privacy & Security › Paste from Other Apps, and set Sill Viewer to Allow |
 | **Login item** | When you choose Launch at Login | Starting Sill Viewer when you log in, and reconnecting to the last Mac | Open it yourself |
 
@@ -102,8 +102,17 @@ One window for everything the other Mac offers, opened on connecting and by Sill
 - Switching to **Sill Viewer** itself (⌘Tab, or its Dock icon) brings up the launcher.
 
 ### Using the other Mac
-- Each window of the other Mac is a window here, with a pill above the focused one for close, minimise
-  and full screen. Resizing a window here resizes it on the other Mac (needs Accessibility there).
+- Each window of the other Mac is a window here, with a **toolbar** across its top: this Mac's close,
+  minimise and full screen, its title, and at the right **⌘ keys**, **Gestures** (a Desktop's: Mission
+  Control, App Exposé, Spaces, Show Desktop), **Quality** (quality, resolution, frame rate), **Refresh**
+  (where the other Mac has hidden displays) and the **launcher**. In full screen it hides with the menu
+  bar.
+- **⌘ keys**: ⌘Tab, ⌘Space and the other shortcuts macOS keeps go to the other Mac while that window
+  has the keyboard; the button lights up and reads "Keys to <Mac>". It is that window's own, and stays
+  on until turned off, but it pauses whenever another window or app has the keyboard: click away and
+  ⌘Tab is this Mac's again, and every key held down on the other Mac is let go. Come back and it
+  resumes. A new window starts as the launcher's Capture shortcuts switch says, and that switch sets
+  every open window. ⌃⌥⌘⎋ always gives the keyboard back. Needs Accessibility on this Mac. Resizing a window here resizes it on the other Mac (needs Accessibility there).
 - The other Mac's app menus appear in this Mac's menu bar while one of its windows is in front.
 - Keys go to the other Mac while its window has the keyboard, ⌘W and ⌘Q included. **⌃⌥⌘⎋** gives the
   keyboard back to this Mac.

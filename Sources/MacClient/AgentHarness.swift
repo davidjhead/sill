@@ -28,6 +28,8 @@ import StreamProtocol
 ///                         Send Audio on) | sound (its sound decoded here) | standard | retina
 ///                         (its Resolution) (default 10 s)
 ///   dockicon <path>       the Desktop's Dock icon as a PNG
+///   toolbar keys|launcher|refresh [window]   a stream window's toolbar button
+///   capture on|off        the launcher's Capture shortcuts switch, for every window
 ///   statusmenu favourites|recent <title>   an item of the menu bar menu's Favourites or Recent chosen
 ///   fakemacs              sample Mac rows for the welcome page and the switcher
 ///   quit
@@ -199,6 +201,20 @@ enum AgentHarness {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: poll)
             }
             poll()
+        case "toolbar":
+            // toolbar keys|launcher|refresh [window]: a stream window's toolbar button pressed (the
+            // frontmost stream window when none is named).
+            guard words.count >= 2 else { return fail("toolbar keys|launcher|refresh [window]") }
+            let named = words.count > 2 ? words[2...].joined(separator: " ") : nil
+            let target = named.flatMap { n in NSApp.windows.first { $0 is StreamWindow && $0.title == n } }
+                ?? NSApp.orderedWindows.first { $0 is StreamWindow && $0.isVisible }
+            guard let w = target as? StreamWindow, let bar = w.toolbarController else { return fail("no stream window") }
+            guard bar.pressForTest(words[1]) else { return fail("no toolbar button “\(words[1])”") }
+            settle { ok(state(app)) }
+        case "capture":
+            // capture on|off: the launcher's Capture shortcuts switch (every open window follows).
+            SystemKeyTap.shared.enabled = words.dropFirst().first == "on"
+            settle { ok(state(app)) }
         case "statusmenu":
             // statusmenu favourites|recent <title>: the menu bar menu's item chosen (a harness run has no
             // status item, so its submenus are built as the menu builds them).
@@ -258,7 +274,13 @@ enum AgentHarness {
         let client = app.client
         let model = LauncherModel.make(app.launcher.input)
         let streams: [[String: Any]] = NSApp.windows.filter { $0.isVisible && $0.delegate === app.windows }.map {
-            ["title": $0.title, "key": $0.isKeyWindow, "frame": rect($0.frame)]
+            var info: [String: Any] = ["title": $0.title, "key": $0.isKeyWindow, "frame": rect($0.frame)]
+            if let w = $0 as? StreamWindow {
+                info["keys"] = w.capturesShortcuts
+                info["keysTitle"] = w.toolbarController?.keysTitleForTest ?? ""
+                info["toolbar"] = w.toolbar?.items.map(\.itemIdentifier.rawValue) ?? []
+            }
+            return info
         }
         return [
             "connected": client.connected,

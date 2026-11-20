@@ -6,7 +6,9 @@ import ApplicationServices
 /// the stream has this app's keyboard. A session event tap, as Screen Sharing's own does; it needs
 /// this app allowed in System Settings › Privacy & Security › Accessibility, and asks once.
 ///
-/// The tap exists only while a stream view has the keyboard and the switch is on, and it lets every
+/// Each window has its own (`StreamWindow.capturesShortcuts`, its toolbar's ⌘ button, David,
+/// 2026-11-20): a new window starts as this switch says, and the switch sets every open window. The tap
+/// exists only while a stream view has the keyboard and its window's capture is on, and it lets every
 /// event through untouched once either ends, so a key never sticks here. ⌃⌥⌘⎋ always reaches this
 /// app (StreamInputView hands the keyboard back with it). Main thread; the tap's callback runs on
 /// the main run loop.
@@ -21,6 +23,8 @@ final class SystemKeyTap {
         }
     }
     static let defaultsKey = "SillClient.captureSystemShortcuts"
+    /// Posted when the switch sets every window (their toolbars' buttons follow).
+    static let changed = Notification.Name("SillClient.systemKeyTapChanged")
 
     private weak var view: StreamInputView?
     private var tap: CFMachPort?
@@ -30,7 +34,9 @@ final class SystemKeyTap {
         get { UserDefaults.standard.bool(forKey: Self.defaultsKey) }
         set {
             UserDefaults.standard.set(newValue, forKey: Self.defaultsKey)
-            if newValue { _ = Self.trusted(prompt: true) }
+            if newValue, !AppDelegate.agent { _ = Self.trusted(prompt: true) }   // never in a harness run
+            for case let window as StreamWindow in NSApp.windows { window.capturesShortcuts = newValue }
+            NotificationCenter.default.post(name: Self.changed, object: nil)
             update()
         }
     }
@@ -52,12 +58,22 @@ final class SystemKeyTap {
         update()
     }
 
+    /// A window's ⌘ button changed: the tap follows at once.
+    func refresh() { update() }
+
+    /// Whether the window with the keyboard captures: its own setting, or the switch for a view in no
+    /// stream window.
+    private var wanted: Bool {
+        guard let view else { return false }
+        return (view.window as? StreamWindow)?.capturesShortcuts ?? enabled
+    }
+
     private func update() {
         let trusted = Self.trusted(prompt: false)
-        if enabled, view != nil, trusted { install() } else { remove() }
+        if wanted, trusted { install() } else { remove() }
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "SillKeyLog") {
-            FileHandle.standardError.write(Data("keys: capture \(enabled ? "on" : "off"), view \(view != nil), trusted \(trusted), tap \(tap != nil)\n".utf8))
+            FileHandle.standardError.write(Data("keys: capture \(wanted ? "on" : "off"), view \(view != nil), trusted \(trusted), tap \(tap != nil)\n".utf8))
         }
         #endif
     }
@@ -95,7 +111,7 @@ final class SystemKeyTap {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passUnretained(event)
         }
-        guard let view, view.window?.isKeyWindow == true, view.window?.firstResponder === view,
+        guard wanted, let view, view.window?.isKeyWindow == true, view.window?.firstResponder === view,
               let ns = NSEvent(cgEvent: event) else { return Unmanaged.passUnretained(event) }
         let flags = ns.modifierFlags
         // ⌃⌥⌘⎋ is this app's: let it through to the view's monitor.

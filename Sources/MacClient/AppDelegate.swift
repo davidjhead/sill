@@ -92,9 +92,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let lastMacKey = "SillClient.lastMac"
 
     #if DEBUG
-    private static var agent: Bool { AgentHarness.enabled }
+    static var agent: Bool { AgentHarness.enabled }
     #else
-    private static let agent = false
+    static let agent = false
     #endif
     /// How long a launch's reconnect has before the welcome page shows (the reconnect itself goes
     /// on, DiscoveryPolicy.redialWindow).
@@ -126,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func connectedChanged(_ connected: Bool) {
+        windows.onShowLauncher = { [weak self] in self?.launcher.show() }
         windows.onRestored = { [weak self] launcherBack in
             guard let self, launcherBack, self.launcher.isShown else { return }
             Timer.scheduledTimer(withTimeInterval: 0, repeats: false) { [weak self] _ in self?.launcher.show() }

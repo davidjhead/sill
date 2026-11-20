@@ -44,8 +44,8 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     private var askedAt: TimeInterval = 0
     /// A Dock icon per remote app with a window open here.
     let dock = DockProxies()
-    /// The focused window's controls (close, minimize, full screen, its title), above it.
-    private let pill = WindowPill()
+    /// Asks for the launcher (a toolbar's launcher button).
+    var onShowLauncher: (() -> Void)?
     /// Every window the host has listed this session: a window new to it opens here by itself when
     /// its app has a window open here (a new document, a dialog).
     private var known: Set<UInt32>?
@@ -103,14 +103,13 @@ final class StreamWindows: NSObject, NSWindowDelegate {
             windowLog("dock: \(app) › \(title) pressed on the other Mac")
             self.client.send(.dockMenu, payload: Wire.encode(DockMenu(app: app, token: UInt32.random(in: 1...UInt32.max), press: id, title: title)))
         }
-        // The pill's refresh: the other Mac makes its hidden displays again (a picture black or wrong).
-        pill.onRefresh = { [weak self] in
-            guard let self, self.client.hostRebuildDesk, self.client.connected else { return }
-            windowLog("refresh: asking the other Mac to make its hidden displays again")
-            self.client.send(.rebuildDesk, payload: Data())
-        }
+        // The toolbars' refresh button shows where the other Mac has hidden displays; their "Keys to"
+        // names the Mac.
         client.$hostRebuildDesk.removeDuplicates().sink { [weak self] _ in
-            DispatchQueue.main.async { self?.updatePill() }
+            DispatchQueue.main.async { self?.updateToolbars() }
+        }.store(in: &subscriptions)
+        client.$macName.removeDuplicates().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.updateToolbars() }
         }.store(in: &subscriptions)
         // The person at the other Mac took these windows back: they close here (and may be opened again).
         client.onTakenBack = { [weak self] ids in
@@ -133,14 +132,6 @@ final class StreamWindows: NSObject, NSWindowDelegate {
             }
         }
         client.onDragOffer = { [weak self] offer in self?.input.dragOffer = offer.files.isEmpty ? nil : offer }
-        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
-            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                self?.updatePill()
-                // On activation the key window can come a moment later (a click on a window that was
-                // key while the app was in the background): look again then.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { self?.updatePill() }
-            }
-        }
         _ = input   // makes the display view, which takes the client's frame hooks
         // The display view decodes too, for the picture's geometry (input), but never shows: each
         // window's own layer is its picture, the main stream's while it is focused.
@@ -274,6 +265,10 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         }
         let window = StreamWindow(source: source, size: initialSize(source))
         window.delegate = self
+        let toolbar = WindowToolbar(window: window, client: client, desktop: display(of: source) != nil || source == .desktop)
+        toolbar.onRefresh = { [weak self] in self?.refreshDesk() }
+        toolbar.onLauncher = { [weak self] in self?.onShowLauncher?() }
+        window.toolbarController = toolbar
         if case .window(let id) = source {
             window.container.over = { [weak self] info, at in self?.dragOver(info, at: at, window: id) ?? [] }
             window.container.exited = { [weak self] info in self?.live.exited(info) }
@@ -402,17 +397,21 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         dock.sync(apps)
     }
 
-    private func updatePill() {
-        guard NSApp.isActive, let key = NSApp.keyWindow as? StreamWindow else { pill.show(over: nil, title: "", image: nil); return }
-        var image: NSImage?
-        // The app's icon with Sill Viewer's in its corner, as its Dock icon has it: the other Mac's
-        // window, not this Mac's; a Desktop window has Sill Viewer's own.
-        if case .window(let id) = key.source, let app = appOf[id], let icon = client.icons[app] {
-            image = badgedIcons[app] ?? { let b = DockProxies.badged(icon); badgedIcons[app] = b; return b }()
-        } else if display(of: key.source) != nil || key.source == .desktop {
-            image = NSApp.applicationIconImage
-        }
-        pill.show(over: key, title: title(key.source), image: image, refresh: client.hostRebuildDesk)
+    /// Every window's toolbar as things are now (the refresh button, the Mac's name).
+    private func updateToolbars() {
+        for window in open.values { window.toolbarController?.update() }
+    }
+
+    /// A toolbar's refresh: the other Mac makes its hidden displays again (a picture black or wrong).
+    private func refreshDesk() {
+        guard client.hostRebuildDesk, client.connected else { return }
+        windowLog("refresh: asking the other Mac to make its hidden displays again")
+        client.send(.rebuildDesk, payload: Data())
+    }
+
+    /// Full screen hides the toolbar with the menu bar, so the picture has the whole screen.
+    func window(_ window: NSWindow, willUseFullScreenPresentationOptions proposed: NSApplication.PresentationOptions = []) -> NSApplication.PresentationOptions {
+        proposed.union([.autoHideToolbar, .autoHideMenuBar, .fullScreen])
     }
 
     /// From a Dock icon: one window, or every window of the app (the most recent one key).
@@ -439,8 +438,6 @@ final class StreamWindows: NSObject, NSWindowDelegate {
 
     /// Apps whose Dock icon, kept in the Dock, was clicked before the other Mac was connected.
     private var dockLaunches: Set<String> = []
-    /// Each app's icon badged as the other Mac's, for the pill.
-    private var badgedIcons: [String: NSImage] = [:]
     private var lastDockLaunch: [String: Date] = [:]
 
     /// A kept Dock icon clicked with none of its app's windows open here: its windows on the other
@@ -483,7 +480,6 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     }
 
     func closeAll() {
-        pill.show(over: nil, title: "", image: nil)
         keeping = false
         defer { keeping = true; restored = false }
         for window in open.values { window.delegate = nil; window.close() }
@@ -611,7 +607,6 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         }
         if window.isKeyWindow { window.makeFirstResponder(input) }
         input.sendViewportNow()
-        updatePill()
     }
 
     // MARK: NSWindowDelegate
@@ -625,7 +620,6 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         } else if case .window(let id) = window.source, let app = appOf[id] {
             LauncherMemory.shared.used(app)
         }
-        updatePill()
         syncDock()   // the Dock menu's ✓ follows the front window
         focused(window)
     }
@@ -735,11 +729,8 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     }
 
 
-    func windowDidResignKey(_ notification: Notification) { updatePill() }
-    func windowDidMiniaturize(_ notification: Notification) { updatePill(); syncDock() }
-    func windowDidDeminiaturize(_ notification: Notification) { updatePill(); syncDock() }
-    func windowDidEnterFullScreen(_ notification: Notification) { updatePill() }
-    func windowDidExitFullScreen(_ notification: Notification) { updatePill() }
+    func windowDidMiniaturize(_ notification: Notification) { syncDock() }
+    func windowDidDeminiaturize(_ notification: Notification) { syncDock() }
 
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? StreamWindow else { return }
@@ -768,7 +759,6 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     }
 
     func windowDidResize(_ notification: Notification) {
-        pill.place()
         guard let window = notification.object as? StreamWindow, window.source == showing else { return }
         input.sendViewport(after: 0.25)
     }
@@ -929,22 +919,23 @@ final class DropContainer: NSView {
 /// One of the other Mac's windows: its picture at 1:1, filling a window with no frame of its own.
 final class StreamWindow: NSWindow {
     let source: StreamSource
+    /// This window's ⌘ keys (Capture shortcuts), its toolbar's button: from the launcher's switch at first.
+    var capturesShortcuts = SystemKeyTap.shared.enabled
+    /// Its toolbar, kept as long as the window.
+    var toolbarController: WindowToolbar?
     let container = DropContainer()
     let placeholder = NSImageView()
     let side = SideView()
 
     init(source: StreamSource, size: NSSize) {
         self.source = source
-        // No frame of its own: the picture fills it, title bar included. This Mac's controls are the
-        // pill above it (WindowPill); the other Mac's title bar and buttons, with that Mac's own
-        // window menu, are in the picture.
+        // This Mac's title bar, a compact toolbar (WindowToolbar: its traffic lights, the title and the
+        // window's buttons), and the picture under it; the other Mac's title bar and buttons, with that
+        // Mac's own window menu, are in the picture.
         super.init(contentRect: NSRect(origin: .zero, size: size),
-                   styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                   styleMask: [.titled, .closable, .miniaturizable, .resizable],
                    backing: .buffered, defer: false)
-        titlebarAppearsTransparent = true
-        titleVisibility = .hidden
         collectionBehavior.insert(.fullScreenPrimary)
-        for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] { standardWindowButton(kind)?.isHidden = true }
         isReleasedWhenClosed = false
         tabbingMode = .disallowed
         backgroundColor = .black

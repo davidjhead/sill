@@ -602,7 +602,9 @@ Scripts/viewer_agent.py run /tmp/flows Scripts/viewer-flows/*.flow   # the launc
   the address and code from its Pair iPhone or iPad… window. While connected, the Mac's name at the
   top of the launcher's sidebar switches to another Mac, adds one or disconnects.
 - **Windows**: pick one from the icon's menu, or an app (all its windows). Each opens as a window
-  here; the pill above the focused one has this Mac's close, minimize and full screen. On the host
+  here, with this Mac's toolbar across its top (WindowToolbar): its traffic lights and title, ⌘ keys
+  (that window's Capture shortcuts, paused while another window has the keyboard), gestures for a
+  Desktop, quality, refresh and the launcher; full screen hides it with the menu bar. On the host
   each lives on a hidden display of its own while it is shown ("Sill's desk"), and goes back when
   closed here or when the viewer leaves. macOS asks once per display identity what to show on
   "Sill": choose Extended Display, Set as Default.
