@@ -269,6 +269,8 @@ enum AgentHarness {
             "streamWindows": streams,
             "dock": app.windows.dock.planned,
             "visibleWindows": NSApp.windows.filter(\.isVisible).map { $0.title.isEmpty ? String(describing: type(of: $0)) : $0.title },
+            "allWindows": NSApp.windows.map { "\(type(of: $0)) visible=\($0.isVisible) level=\($0.level.rawValue) \(Int($0.frame.width))x\(Int($0.frame.height)) from \(Bundle(for: type(of: $0)).bundleURL.lastPathComponent)" },
+            "firstResponder": app.launcher.windowForTest.map { String(describing: type(of: $0.firstResponder as Any)) } ?? "",
         ]
     }
 

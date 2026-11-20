@@ -63,6 +63,20 @@ final class Launcher: NSObject, NSWindowDelegate {
 
     fileprivate func themeChanged(_ theme: LauncherTheme) { window?.appearance = Self.appearance(theme) }
 
+    /// Another window in front (a Desktop's or an app's just opened): the search lets go of the
+    /// keyboard. Kept, macOS's AutoFill showed its suggestions popover (SafariPlatformSupport's
+    /// SPRoundedWindow) under it, empty, over the window now in front, until a click somewhere.
+    func windowDidResignKey(_ notification: Notification) {
+        window?.makeFirstResponder(nil)
+    }
+
+    /// In front again: the search takes the keyboard back (LauncherView).
+    func windowDidBecomeKey(_ notification: Notification) {
+        NotificationCenter.default.post(name: Self.focusSearch, object: nil)
+    }
+
+    static let focusSearch = Notification.Name("SillLauncherFocusSearch")
+
     func windowWillClose(_ notification: Notification) {
         window?.delegate = nil
         window = nil   // a fresh one next time, its search empty

@@ -113,6 +113,7 @@ struct LauncherView: View, Equatable {
         .foregroundStyle(theme.ink)
         .environment(\.colorScheme, theme.scheme)
         .onAppear { searchFocused = true }
+        .onReceive(NotificationCenter.default.publisher(for: Launcher.focusSearch)) { _ in searchFocused = true }
         .onExitCommand { actions.close() }
         #if DEBUG
         .onChange(of: query, initial: true) { _, q in LauncherQuery.current = q }   // the agent harness's state
@@ -381,6 +382,7 @@ struct LauncherView: View, Equatable {
             TextField("Search \(page.macName)", text: $query)
                 .textFieldStyle(.plain)
                 .focused($searchFocused)
+                .autocorrectionDisabled(true)   // a search: no corrections or completions under it
                 .onSubmit { if let first = model.firstChoice { actions.open(first) } }
                 .accessibilityLabel("Search \(page.macName)")
         }
