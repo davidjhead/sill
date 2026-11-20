@@ -25,11 +25,12 @@ import StreamProtocol
 ///   launcher show|hide
 ///   snap <path> [launcher|key|all]
 ///   wait <what> [seconds] connected | apps | windows | launcher | stream | sendaudio (the other Mac's
-///                         Send Audio on) | sound (its sound decoded here) | standard | retina
+///                         Send Audio on) | sound (its sound decoded here) | standard | retina | notoast (no link toast)
 ///                         (its Resolution) (default 10 s)
 ///   dockicon <path>       the Desktop's Dock icon as a PNG
 ///   toolbar keys|launcher|refresh [window]   a stream window's toolbar button
 ///   capture on|off        the launcher's Capture shortcuts switch, for every window
+///   toast press           the link warning's toast in a session window, clicked
 ///   linkwarning behind|clear   the other Mac's link report faked: can't carry Extreme, or keeping up
 ///   statusmenu favourites|recent <title>   an item of the menu bar menu's Favourites or Recent chosen
 ///   fakemacs              sample Mac rows for the welcome page and the switcher
@@ -224,6 +225,11 @@ enum AgentHarness {
             app.client.objectWillChange.send()
             app.windows.updateToolbars()
             settle { ok(state(app)) }
+        case "toast":
+            // toast press: the link warning's toast clicked.
+            guard let toast = app.windows.linkToast, toast.superview != nil else { return fail("no toast showing") }
+            toast.press()
+            settle { ok(state(app)) }
         case "capture":
             // capture on|off: the launcher's Capture shortcuts switch (every open window follows).
             SystemKeyTap.shared.enabled = words.dropFirst().first == "on"
@@ -276,6 +282,7 @@ enum AgentHarness {
         case "launcher": app.launcher.isShown
         case "stream": app.client.active != .none
         case "sendaudio": app.client.settings.displayed?.sendAudio == true
+        case "notoast": app.windows.linkToast?.superview == nil
         case "sound": app.audio.framesDecoded > 0
         case "standard": app.client.settings.displayed?.captureScale == 1
         case "retina": app.client.settings.displayed?.captureScale == 2
@@ -290,6 +297,7 @@ enum AgentHarness {
             var info: [String: Any] = ["title": $0.title, "key": $0.isKeyWindow, "frame": rect($0.frame)]
             if let w = $0 as? StreamWindow {
                 info["keys"] = w.capturesShortcuts
+                info["toast"] = app.windows.linkToast.map { $0.superview === w.container } ?? false
                 info["keysTitle"] = w.toolbarController?.keysTitleForTest ?? ""
                 info["toolbar"] = w.toolbar?.items.map(\.itemIdentifier.rawValue) ?? []
             }

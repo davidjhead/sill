@@ -401,9 +401,39 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         dock.sync(apps)
     }
 
-    /// Every window's toolbar as things are now (the refresh button, the Mac's name).
+    /// Every window's toolbar as things are now (the refresh button, the Mac's name, the link warning),
+    /// and the link warning's toast.
     func updateToolbars() {
         for window in open.values { window.toolbarController?.update() }
+        updateLinkToast()
+    }
+
+    /// The link warning's toast (LinkToast) and the warning it was shown for: once per warning.
+    private(set) var linkToast: LinkToast?
+    private var toastedWarning: AwayCopy.Callout?
+
+    /// A new link warning toasts in the session's front window; one that clears takes its toast away
+    /// and lets the next warning toast again.
+    private func updateLinkToast() {
+        guard let warning = LinkWarning.callout(client) else {
+            toastedWarning = nil
+            linkToast?.hide(); linkToast = nil
+            return
+        }
+        guard warning != toastedWarning else { return }
+        let front = (NSApp.keyWindow as? StreamWindow)
+            ?? NSApp.orderedWindows.first { $0 is StreamWindow && $0.isVisible && !$0.isMiniaturized } as? StreamWindow
+        guard let front else { return }   // no session window: the launcher's banner says it
+        toastedWarning = warning
+        linkToast?.hide()
+        let toast = LinkToast(warning) { [weak self] in
+            guard let self, let change = warning.button?.change else { return }
+            windowLog("link: the toast's \(warning.button?.title ?? "") pressed")
+            self.client.changeSettings(change)
+        }
+        toast.show(in: front.container)
+        linkToast = toast
+        windowLog("link: toast in \(front.source): \(warning.text)")
     }
 
     /// A toolbar's refresh: the other Mac makes its hidden displays again (a picture black or wrong).
@@ -608,6 +638,9 @@ final class StreamWindows: NSObject, NSWindowDelegate {
             input.frame = window.container.bounds
             input.autoresizingMask = [.width, .height]
             window.container.addSubview(input)
+            if let toast = linkToast, toast.superview === window.container {   // the toast stays over the picture
+                window.container.addSubview(toast, positioned: .above, relativeTo: nil)
+            }
         }
         if window.isKeyWindow { window.makeFirstResponder(input) }
         input.sendViewportNow()
@@ -625,6 +658,7 @@ final class StreamWindows: NSObject, NSWindowDelegate {
             LauncherMemory.shared.used(app)
         }
         syncDock()   // the Dock menu's ✓ follows the front window
+        updateLinkToast()   // a warning that came while no session window was open toasts here now
         focused(window)
     }
 
@@ -662,6 +696,9 @@ final class StreamWindows: NSObject, NSWindowDelegate {
             input.frame = window.container.bounds
             input.autoresizingMask = [.width, .height]
             window.container.addSubview(input)
+            if let toast = linkToast, toast.superview === window.container {   // the toast stays over the picture
+                window.container.addSubview(toast, positioned: .above, relativeTo: nil)
+            }
         }
         if window.isKeyWindow { window.makeFirstResponder(input) }
         input.textScale = nil

@@ -1,0 +1,22 @@
+# The link warning as a toast in the session's window (LinkToast): it shows when the other Mac says the
+# link can't keep up (faked: a loopback host never falls behind), a click on it uses the recommended
+# quality, it goes by itself after 5 s, and the launcher's banner and the toolbar's warning stay while
+# the link is still behind.
+wait apps 30
+click 75 242
+wait stream 15
+expect streamWindows.0.toast == false
+linkwarning behind
+expect streamWindows.0.toast == true
+snap toast.png all
+toast press
+expect stream.bitrate == 4000000
+wait notoast 2
+linkwarning clear
+expect streamWindows.0.toast == false
+linkwarning behind
+expect streamWindows.0.toast == true
+wait notoast 8
+expect streamWindows.0.toast == false
+expect linkWarning.button == Use Low
+expect streamWindows.0.toolbar contains sill.linkWarning
