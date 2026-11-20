@@ -118,8 +118,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func connectedChanged(_ connected: Bool) {
-        windows.onRestored = { [weak self] in
-            guard let self, self.launcher.isShown else { return }
+        windows.onRestored = { [weak self] launcherBack in
+            guard let self, launcherBack, self.launcher.isShown else { return }
             Timer.scheduledTimer(withTimeInterval: 0, repeats: false) { [weak self] _ in self?.launcher.show() }
         }
         if connected {

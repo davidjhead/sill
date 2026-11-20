@@ -183,9 +183,9 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     private var keeping = true
     /// The list has been looked at for this session.
     private var restored = false
-    /// Called once last session's windows are open again (none, too), so the launcher can come back
-    /// in front of them (AppDelegate).
-    var onRestored: (() -> Void)?
+    /// Called once last session's windows are open again, with whether the launcher should come back in
+    /// front of them (AppDelegate): only when this opened some and nothing was opened here before them.
+    var onRestored: ((_ launcherBack: Bool) -> Void)?
 
     private func keep() {
         guard keeping, client.connected, !client.macName.isEmpty else { return }
@@ -208,7 +208,11 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         if UserDefaults.standard.bool(forKey: "SillResizeTest") { restored = true; return }   // the test's own window only
         #endif
         restored = true
-        defer { onRestored?() }
+        // A window opened here before the list came (the Desktop chosen at once from the launcher) is the
+        // one in use: last session's windows come back behind it, and the launcher stays where it is.
+        let chosen = !open.isEmpty
+        var reopened = 0
+        defer { onRestored?(reopened > 0 && !chosen) }
         windowLog("restore: key \(keptKey), saved \(UserDefaults.standard.data(forKey: keptKey)?.count ?? 0) bytes")
         guard let data = UserDefaults.standard.data(forKey: keptKey),
               let kept = try? JSONDecoder().decode([Kept].self, from: data), !kept.isEmpty else { return }
@@ -220,7 +224,12 @@ final class StreamWindows: NSObject, NSWindowDelegate {
             used.insert(w.id)
             return w.id
         }
-        for (i, id) in found.enumerated() { open(.window(id), focus: i == found.count - 1) }
+        let inUse = chosen ? NSApp.orderedWindows.first { $0 is StreamWindow && $0.isVisible } : nil
+        for (i, id) in found.enumerated() where open[.window(id)] == nil {
+            open(.window(id), focus: !chosen && i == found.count - 1)
+            reopened += 1
+        }
+        inUse?.orderFront(nil)   // opened unfocused, they came in front of it: it goes back on top
     }
 
     /// Each window's side stream decoder, by the host's window ID, for the network queue.
