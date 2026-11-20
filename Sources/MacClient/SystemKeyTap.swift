@@ -34,11 +34,36 @@ final class SystemKeyTap {
         get { UserDefaults.standard.bool(forKey: Self.defaultsKey) }
         set {
             UserDefaults.standard.set(newValue, forKey: Self.defaultsKey)
-            if newValue, !AppDelegate.agent { _ = Self.trusted(prompt: true) }   // never in a harness run
+            if newValue { Self.askForAccess() }
             for case let window as StreamWindow in NSApp.windows { window.capturesShortcuts = newValue }
             NotificationCenter.default.post(name: Self.changed, object: nil)
             update()
         }
+    }
+
+    /// Capture turned on without Accessibility: macOS's own alert once for each build, then Sill Viewer's,
+    /// which says why it can still be missing with the switch on in System Settings (an ad hoc build is
+    /// a new app to macOS each time: the switch there is an earlier build's) and opens the pane. Never in
+    /// a harness run. Main thread.
+    static func askForAccess() {
+        guard !AppDelegate.agent, !trusted(prompt: false) else { return }
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        let key = "SillClient.askedAccessibilityBuild"
+        if UserDefaults.standard.string(forKey: key) != build {
+            UserDefaults.standard.set(build, forKey: key)
+            _ = trusted(prompt: true)
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Sill Viewer needs Accessibility to send ⌘Tab and ⌘Space"
+        alert.informativeText = "Turn on Sill Viewer in System Settings › Privacy & Security › Accessibility (Device Control). "
+            + "If it is already on, that entry is for an earlier build of Sill Viewer: select it, remove it with −, "
+            + "and add this copy again. Until then, ⌘Tab and ⌘Space stay on this Mac; every other key still goes across."
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Not Now")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let pane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(pane)
     }
 
     /// Whether this app may tap the keyboard. With `prompt`, macOS shows its alert the first time.

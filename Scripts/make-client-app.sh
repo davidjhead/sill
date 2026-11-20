@@ -5,7 +5,8 @@
 #   Scripts/make-client-app.sh --notarize  …then notarized and stapled (.build/Sill Viewer.zip too)
 #   Scripts/make-client-app.sh --open      …and open it
 # Signing: SILL_SIGN_IDENTITY (a name or SHA-1), else the first Developer ID Application identity,
-# else the first Apple Development one, else ad hoc. A real identity keeps the login keychain's
+# else the first Apple Development one, else this Mac's own "Sill Viewer Local Signing"
+# (Scripts/make-local-signing-identity.sh), else ad hoc. A real identity keeps the login keychain's
 # device key and the privacy grants (Local Network, Accessibility) across rebuilds and copies to
 # another Mac: both name the signature's designated requirement, which an ad hoc signature changes
 # with every build. Notarizing uses the notarytool profile SILL_NOTARY_PROFILE (sill-notary). The icon
@@ -79,9 +80,19 @@ cp "$icon_out"/compiled/* "$app/Contents/Resources/" 2>/dev/null || true
 ids="$(security find-identity -v -p codesigning 2>/dev/null || true)"
 identity="${SILL_SIGN_IDENTITY:-$(echo "$ids" | awk '/"Developer ID Application: / { print $2; exit }')}"
 [ -n "$identity" ] || identity="$(echo "$ids" | awk '/"Apple Development: / { print $2; exit }')"
-[ -n "$identity" ] || { identity="-"; echo "warning: no signing identity; signing ad hoc" >&2; }
+# This Mac's own (Scripts/make-local-signing-identity.sh): self-signed, so not "valid" to find-identity -v,
+# but a designated requirement that stays the same across builds; no timestamp (Apple's server takes
+# only its own certificates).
+local_id=""
+if [ -z "$identity" ]; then
+    local_id="$(security find-identity -p codesigning 2>/dev/null | awk '/"Sill Viewer Local Signing"/ { print $2; exit }')"
+fi
+[ -n "$identity" ] || [ -n "$local_id" ] || { identity="-"; echo "warning: no signing identity; signing ad hoc (Scripts/make-local-signing-identity.sh makes one)" >&2; }
 # The helper first (a nested bundle is sealed into its parent's signature), then the app.
-if [ "$identity" = "-" ]; then
+if [ -n "$local_id" ]; then
+    codesign --force --options runtime --timestamp=none --sign "$local_id" "$helper"
+    codesign --force --options runtime --timestamp=none --sign "$local_id" "$app"
+elif [ "$identity" = "-" ]; then
     codesign --force --options runtime --timestamp=none --sign - "$helper"
     codesign --force --options runtime --timestamp=none --sign - "$app"
 else

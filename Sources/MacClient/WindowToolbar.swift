@@ -138,7 +138,7 @@ final class WindowToolbar: NSObject, NSToolbarDelegate, NSMenuDelegate {
     func toggleKeys() {
         guard let window else { return }
         window.capturesShortcuts.toggle()
-        if window.capturesShortcuts, !AppDelegate.agent { _ = SystemKeyTap.trusted(prompt: true) }   // never in a harness run
+        if window.capturesShortcuts { SystemKeyTap.askForAccess() }
         SystemKeyTap.shared.refresh()
         update()
     }
