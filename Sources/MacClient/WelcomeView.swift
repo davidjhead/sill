@@ -11,6 +11,7 @@ import StreamProtocol
 struct WelcomeView: View {
     @ObservedObject var client: StreamClient
     @ObservedObject var page: ConnectPage
+    @Environment(\.launcherTheme) private var theme
 
     var body: some View {
         ZStack {
@@ -22,8 +23,8 @@ struct WelcomeView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Backdrop())
-        .foregroundStyle(.white)
-        .environment(\.colorScheme, .dark)
+        .foregroundStyle(theme.ink)
+        .environment(\.colorScheme, theme.scheme)
     }
 
     private var chooser: some View {
@@ -32,11 +33,11 @@ struct WelcomeView: View {
                 Text("Choose a Mac").font(.system(size: 30, weight: .bold))
                 HStack(spacing: 7) {
                     if client.macs.isEmpty || isWorking { ProgressView().controlSize(.small) }
-                    Text(client.status).font(.system(size: 13)).foregroundStyle(.white.opacity(0.75))
+                    Text(client.status).font(.system(size: 13)).foregroundStyle(theme.ink.opacity(0.75))
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 }
                 if let notice = client.notice, notice.storeLink, notice.text == client.status {
-                    Text("Update Sill on this Mac to keep using that Mac.").font(.system(size: 12)).foregroundStyle(.white.opacity(0.75))
+                    Text("Update Sill on this Mac to keep using that Mac.").font(.system(size: 12)).foregroundStyle(theme.ink.opacity(0.75))
                 }
                 PairingLine(pairing: client.pairing)
             }
@@ -53,7 +54,7 @@ struct WelcomeView: View {
             if client.showsNearbyHint {
                 VStack(spacing: 10) {
                     if client.searchingNearby {
-                        Text("Also looking nearby").font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+                        Text("Also looking nearby").font(.system(size: 12)).foregroundStyle(theme.ink.opacity(0.7))
                     } else {
                         Button { client.searchNearby() } label: {
                             Text("Search Nearby").font(.system(size: 12)).padding(.horizontal, 16).frame(height: 28)
@@ -63,7 +64,7 @@ struct WelcomeView: View {
                         .help("Also looks for a Mac with Direct Wireless Connection turned on, without a Wi-Fi network.")
                     }
                     Text("The other Mac has to be on the same network as this one, or have Direct Wireless Connection turned on in Sill. Away from home, add it once with a code from that Mac.")
-                        .font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.55))
+                        .font(.system(size: 11.5)).foregroundStyle(theme.ink.opacity(0.55))
                         .multilineTextAlignment(.center).frame(maxWidth: 520)
                 }
                 .padding(.bottom, 26)
@@ -89,8 +90,8 @@ struct WelcomeView: View {
                 Text(mac.name).font(.system(size: 14, weight: .semibold)).lineLimit(1).truncationMode(.middle)
                 if let word = mac.word {
                     HStack(spacing: 5) {
-                        Circle().fill(Self.dot(mac)).frame(width: 6, height: 6)
-                        Text(word).font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.7))
+                        Circle().fill(dot(mac)).frame(width: 6, height: 6)
+                        Text(word).font(.system(size: 11.5)).foregroundStyle(theme.ink.opacity(0.7))
                     }
                 }
             }
@@ -115,13 +116,13 @@ struct WelcomeView: View {
         Button { page.startAdding(client) } label: {
             VStack(spacing: 10) {
                 Image(systemName: "plus").font(.system(size: 18, weight: .semibold))
-                    .frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.12)))
+                    .frame(width: 44, height: 44).background(Circle().fill(theme.ink.opacity(0.12)))
                 Text("Add a Mac").font(.system(size: 13, weight: .semibold))
-                Text("With a code, at home or away").font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
+                Text("With a code, at home or away").font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.6))
                     .multilineTextAlignment(.center)
             }
             .frame(width: 168, height: 150)
-            .background(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.3), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
+            .background(RoundedRectangle(cornerRadius: 18).strokeBorder(theme.ink.opacity(0.3), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
             .contentShape(RoundedRectangle(cornerRadius: 18))
         }
         .buttonStyle(LauncherTileStyle(padding: 0))
@@ -139,12 +140,12 @@ struct WelcomeView: View {
         return palettes[abs(sum) % palettes.count]
     }
 
-    static func dot(_ mac: FoundMac) -> Color {
-        if mac.route == .remote { return Color(red: 0.5, green: 0.69, blue: 1) }
+    func dot(_ mac: FoundMac) -> Color {
+        if mac.route == .remote { return theme.ring }
         switch mac.word {
         case "Not paired"?: return Color(white: 0.55)
-        case "Update Sill"?: return Color(red: 1, green: 0.62, blue: 0.2)
-        default: return Color(red: 0.3, green: 0.85, blue: 0.39)
+        case "Update Sill"?: return theme.warn
+        default: return theme.ok
         }
     }
 }
@@ -176,12 +177,13 @@ final class ConnectPage: ObservableObject {
 /// Pairing's state in a line: working, paired or failed.
 private struct PairingLine: View {
     let pairing: PairingPhase
+    @Environment(\.launcherTheme) private var theme
     var body: some View {
         switch pairing {
         case .idle: EmptyView()
-        case .working(let text): Label(text, systemImage: "hourglass").font(.system(size: 12)).foregroundStyle(.white.opacity(0.75))
-        case .paired(let name): Label("Paired with \(name).", systemImage: "checkmark.circle").font(.system(size: 12)).foregroundStyle(Color(red: 0.3, green: 0.85, blue: 0.39))
-        case .failed(let problem): Label(problem.text, systemImage: "exclamationmark.triangle").font(.system(size: 12)).foregroundStyle(Color(red: 1, green: 0.62, blue: 0.2))
+        case .working(let text): Label(text, systemImage: "hourglass").font(.system(size: 12)).foregroundStyle(theme.ink.opacity(0.75))
+        case .paired(let name): Label("Paired with \(name).", systemImage: "checkmark.circle").font(.system(size: 12)).foregroundStyle(theme.ok)
+        case .failed(let problem): Label(problem.text, systemImage: "exclamationmark.triangle").font(.system(size: 12)).foregroundStyle(theme.warn)
         }
     }
 }
@@ -194,6 +196,7 @@ struct AddMacView: View {
 
     @ObservedObject var client: StreamClient
     @ObservedObject var page: ConnectPage
+    @Environment(\.launcherTheme) private var theme
     @State private var way = Way.network
     @State private var homeCode = ""
     @State private var address = ""
@@ -264,9 +267,9 @@ struct AddMacView: View {
     private func tab(_ title: String, _ w: Way) -> some View {
         Button { way = w } label: {
             Text(title).font(.system(size: 12, weight: way == w ? .semibold : .regular))
-                .foregroundStyle(way == w ? Color(red: 0.09, green: 0.13, blue: 0.23) : .white.opacity(0.85))
+                .foregroundStyle(way == w ? theme.onPill : theme.ink.opacity(0.85))
                 .padding(.horizontal, 14).frame(height: 26)
-                .background(Capsule().fill(.white.opacity(way == w ? 0.9 : 0)))
+                .background(Capsule().fill(theme.pill.opacity(way == w ? 0.9 : 0)))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -282,20 +285,20 @@ struct AddMacView: View {
 
     private func field(_ title: String, _ text: Binding<String>, prompt: String, mono: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
-            TextField(title, text: text, prompt: Text(prompt).foregroundStyle(.white.opacity(0.35)))
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(theme.ink.opacity(0.6))
+            TextField(title, text: text, prompt: Text(prompt).foregroundStyle(theme.ink.opacity(0.35)))
                 .font(mono ? .system(size: 18, weight: .medium, design: .monospaced) : .system(size: 14))
                 .padding(.horizontal, 12).frame(height: mono ? 42 : 34)
-                .background(RoundedRectangle(cornerRadius: 9).fill(.black.opacity(0.22)))
-                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.18)))
+                .background(RoundedRectangle(cornerRadius: 9).fill(theme.well.opacity(2)))
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(theme.ink.opacity(0.18)))
         }
     }
 
     private func primary(_ title: String, enabled: Bool, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(red: 0.09, green: 0.13, blue: 0.23))
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(theme.onPill)
                 .padding(.horizontal, 22).frame(height: 32)
-                .background(Capsule().fill(.white)).contentShape(Capsule())
+                .background(Capsule().fill(theme.pill)).contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .keyboardShortcut(.defaultAction)
@@ -308,13 +311,13 @@ struct AddMacView: View {
         card {
             Label("Choose the Mac on the welcome page", systemImage: "desktopcomputer").font(.system(size: 15, weight: .semibold))
             Text("A Mac on this network that is not paired yet says “Not paired”. Click it, and it shows a 12-digit code in Sill’s window to type here. Not near it? Use “Away from home” with the address and code from its Sill window.")
-                .font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 12.5)).foregroundStyle(theme.ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private func homeCard(_ ask: HomeAsk) -> some View {
         card {
-            Text("Enter the 12-digit code \(ask.name) shows.").font(.system(size: 13)).foregroundStyle(.white.opacity(0.8))
+            Text("Enter the 12-digit code \(ask.name) shows.").font(.system(size: 13)).foregroundStyle(theme.ink.opacity(0.8))
             field("Code", $homeCode, prompt: "0000 0000 0000", mono: true)
                 .onSubmit { client.pairHome(code: homeCode) }
             HStack {
@@ -329,7 +332,7 @@ struct AddMacView: View {
     private var awayCard: some View {
         card {
             Text("The other Mac’s Sill shows its address and a code when you choose to pair a device away from home.")
-                .font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 12.5)).foregroundStyle(theme.ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
             field("Address", $address, prompt: "name.tailnet.ts.net or 100.101.102.103")
             field("Code", $code, prompt: "12 digits", mono: true)
             HStack {
@@ -344,7 +347,7 @@ struct AddMacView: View {
     private var linkCard: some View {
         card {
             Text("A sill://pair link, copied from the other Mac’s pairing window or sent to you in Messages.")
-                .font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 12.5)).foregroundStyle(theme.ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
             field("Link", $link, prompt: "sill://pair?…")
             HStack {
                 Button("Paste") { link = NSPasteboard.general.string(forType: .string) ?? link }.buttonStyle(.plain)

@@ -37,7 +37,7 @@ final class Launcher: NSObject, NSWindowDelegate {
         window.title = app.client.connected ? app.client.macName : "Sill Viewer"   // for the Window menu and Mission Control
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.appearance = NSAppearance(named: .darkAqua)   // the launcher is dark always (LauncherView)
+        window.appearance = Self.appearance(LauncherTheme.named(UserDefaults.standard.string(forKey: LauncherTheme.key)))
         window.contentMinSize = NSSize(width: 640, height: 440)
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
@@ -55,6 +55,13 @@ final class Launcher: NSObject, NSWindowDelegate {
     }
 
     func hide() { window?.close() }
+
+    /// The window's own appearance (its menus, title bar buttons, switches) as the theme's.
+    static func appearance(_ theme: LauncherTheme) -> NSAppearance? {
+        NSAppearance(named: theme.scheme == .dark ? .darkAqua : .aqua)
+    }
+
+    fileprivate func themeChanged(_ theme: LauncherTheme) { window?.appearance = Self.appearance(theme) }
 
     func windowWillClose(_ notification: Notification) {
         window?.delegate = nil
@@ -148,14 +155,20 @@ private struct LiveLauncher: View {
     @ObservedObject var connectPage: ConnectPage
     let launcher: Launcher
     @State private var ownSwitches = 0
+    @AppStorage(LauncherTheme.key) private var themeID = LauncherTheme.midnight.id.rawValue
 
     var body: some View {
-        if client.connected && !launcher.connectPage.showsAddMac(client) {
-            launcherView
-        } else {
-            WelcomeView(client: client, page: launcher.connectPage)
-                .onAppear { launcher.setTitle("Sill Viewer", subtitle: "") }
+        let theme = LauncherTheme.named(themeID)
+        Group {
+            if client.connected && !launcher.connectPage.showsAddMac(client) {
+                launcherView
+            } else {
+                WelcomeView(client: client, page: launcher.connectPage)
+                    .onAppear { launcher.setTitle("Sill Viewer", subtitle: "") }
+            }
         }
+        .environment(\.launcherTheme, theme)
+        .onChange(of: themeID) { launcher.themeChanged(theme) }
     }
 
     private var launcherView: some View {

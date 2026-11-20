@@ -14,7 +14,7 @@ expect launcher.appOrder == name
 click 244 34
 expect launcher.sidebarHidden == true
 snap launcher-sidebar-hidden.png
-click 472 34
+click 440 34
 expect launcher.sidebarHidden == false
 key ctrl-cmd-s
 expect launcher.sidebarHidden == true

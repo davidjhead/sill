@@ -71,6 +71,8 @@ struct LauncherView: View {
     @State private var query = ""
     @State private var pane = Pane.home
     @AppStorage("launcher.sidebarHidden") private var sidebarHidden = false
+    @Environment(\.launcherTheme) private var theme
+    @AppStorage(LauncherTheme.key) private var themeID = LauncherTheme.midnight.id.rawValue
     @FocusState private var searchFocused: Bool
 
     private var model: LauncherModel { LauncherModel.make(page.input, query: query) }
@@ -88,8 +90,8 @@ struct LauncherView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()   // under the see-through title bar: its buttons sit over the sidebar
         .background(Backdrop())
-        .foregroundStyle(.white)
-        .environment(\.colorScheme, .dark)
+        .foregroundStyle(theme.ink)
+        .environment(\.colorScheme, theme.scheme)
         .onAppear { searchFocused = true }
         .onExitCommand { actions.close() }
         #if DEBUG
@@ -110,7 +112,7 @@ struct LauncherView: View {
             paneRow(.favourites, "Favourites", "star")
             paneRow(.apps, "All Apps", "square.grid.2x2")
             if !model.desktops.isEmpty {
-                Text("Desktops").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+                Text("Desktops").font(.system(size: 11, weight: .semibold)).foregroundStyle(theme.ink.opacity(0.6))
                     .padding(.horizontal, 9).padding(.top, 14).padding(.bottom, 3)
                 ForEach(model.desktops, id: \.name) { d in desktopRow(d) }
             }
@@ -118,7 +120,7 @@ struct LauncherView: View {
             sidebarSettings
             Button(action: actions.disconnect) {
                 Text("Disconnect").font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(red: 1, green: 0.71, blue: 0.67))
+                    .foregroundStyle(theme.danger)
                     .frame(maxWidth: .infinity).frame(height: 28).contentShape(Rectangle())
             }
             .buttonStyle(.plain).padding(.top, 4)
@@ -150,19 +152,19 @@ struct LauncherView: View {
             Button("Disconnect from \(page.macName)", action: actions.disconnect)
         } label: {
             HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.18))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.25)))
+                RoundedRectangle(cornerRadius: 10).fill(theme.ink.opacity(0.18))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.ink.opacity(0.25)))
                     .overlay(Image(systemName: "desktopcomputer").font(.system(size: 16)))
                     .frame(width: 34, height: 34)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(page.macName).font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                     HStack(spacing: 5) {
-                        Circle().fill(page.locked == nil ? Color(red: 0.3, green: 0.85, blue: 0.39) : Color(red: 1, green: 0.62, blue: 0.2)).frame(width: 6, height: 6)
-                        Text(page.status).font(.system(size: 11)).foregroundStyle(.white.opacity(0.72)).lineLimit(1)
+                        Circle().fill(page.locked == nil ? theme.ok : theme.warn).frame(width: 6, height: 6)
+                        Text(page.status).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.72)).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.8))
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(theme.ink.opacity(0.8))
             }
             .padding(.horizontal, 8).padding(.vertical, 6)
             .background(Glass(cornerRadius: 11, fill: 0.14, stroke: 0.2))
@@ -196,9 +198,9 @@ struct LauncherView: View {
             Image(systemName: symbol).font(.system(size: 13)).frame(width: 16)
             Text(title).font(.system(size: 13)).lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 0)
-            if open { Circle().fill(.white.opacity(0.85)).frame(width: 5, height: 5) }
+            if open { Circle().fill(theme.ink.opacity(0.85)).frame(width: 5, height: 5) }
         }
-        .foregroundStyle(.white.opacity(selected ? 1 : 0.88))
+        .foregroundStyle(theme.ink.opacity(selected ? 1 : 0.88))
         .padding(.horizontal, 9).frame(height: 30)
         .background(SidebarHighlight(selected: selected))
         .contentShape(Rectangle())
@@ -216,6 +218,11 @@ struct LauncherView: View {
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
                 .help("Quality and frame rate")
             }
+            Menu { themeItems } label: {
+                settingRow("Theme") { Text(theme.name).fontWeight(.semibold) }
+            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+            .help("The launcher's look: Midnight, Graphite or Daylight")
             settingRow("Sound") { Toggle("", isOn: Binding(get: { s.soundOn }, set: { _ in actions.toggleSound() })) }
                 .disabled(!s.soundAvailable)
                 .help(s.soundAvailable ? "Play the other Mac’s sound here" : "\(page.macName)’s Sill does not send sound yet")
@@ -224,12 +231,12 @@ struct LauncherView: View {
         }
         .toggleStyle(.switch).controlSize(.mini)
         .padding(6)
-        .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.18)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(theme.well))
     }
 
     private func settingRow<V: View>(_ label: String, @ViewBuilder _ value: () -> V) -> some View {
         HStack {
-            Text(label).foregroundStyle(.white.opacity(0.75))
+            Text(label).foregroundStyle(theme.ink.opacity(0.75))
             Spacer(minLength: 4)
             value().labelsHidden()
         }
@@ -252,6 +259,13 @@ struct LauncherView: View {
                     Button { actions.setMaxFPS(f) } label: { checked(f == fps, "Up to \(f) fps") }
                 }
             }
+        }
+    }
+
+    /// The three themes, the current one ticked (LauncherTheme).
+    @ViewBuilder private var themeItems: some View {
+        ForEach(LauncherTheme.all) { t in
+            Button { themeID = t.id.rawValue } label: { checked(t.id == theme.id, t.name) }
         }
     }
 
@@ -307,7 +321,7 @@ struct LauncherView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(title).font(.system(size: 22, weight: .bold)).lineLimit(1)
                 if sidebarHidden {
-                    Text(page.status).font(.system(size: 11)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                    Text(page.status).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.7)).lineLimit(1)
                 }
             }
             Spacer(minLength: 8)
@@ -323,8 +337,8 @@ struct LauncherView: View {
         Button(action: toggleSidebar) {
             Image(systemName: "sidebar.left").font(.system(size: 14))
                 .frame(width: 32, height: 32)
-                .background(Circle().fill(.white.opacity(sidebarHidden ? 0.14 : 0))
-                    .overlay(Circle().strokeBorder(.white.opacity(sidebarHidden ? 0.2 : 0))))
+                .background(Circle().fill(theme.ink.opacity(sidebarHidden ? 0.14 : 0))
+                    .overlay(Circle().strokeBorder(theme.ink.opacity(sidebarHidden ? 0.2 : 0))))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -343,7 +357,7 @@ struct LauncherView: View {
 
     private var search: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(.white.opacity(0.8))
+            Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(theme.ink.opacity(0.8))
             TextField("Search \(page.macName)", text: $query)
                 .textFieldStyle(.plain)
                 .focused($searchFocused)
@@ -369,11 +383,14 @@ struct LauncherView: View {
             Button(action: actions.toggleSound) { capsuleIcon(s.soundOn ? "speaker.wave.2" : "speaker.slash", on: s.soundOn) }
                 .buttonStyle(.plain).disabled(!s.soundAvailable)
                 .help(s.soundAvailable ? (s.soundOn ? "Sound on" : "Sound off") : "\(page.macName)’s Sill does not send sound yet")
+            Menu { themeItems } label: { capsuleIcon("paintpalette", on: false) }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                .help("Theme: \(theme.name)")
             Button(action: actions.toggleCapture) { capsuleIcon("command", on: s.captureOn) }
                 .buttonStyle(.plain)
                 .help(s.captureOn ? "Shortcuts go to the other Mac" : "Shortcuts stay on this Mac")
             Button(action: actions.disconnect) {
-                capsuleIcon("power", on: false, tint: Color(red: 1, green: 0.71, blue: 0.67))
+                capsuleIcon("power", on: false, tint: theme.danger)
             }
             .buttonStyle(.plain).help("Disconnect from \(page.macName)")
         }
@@ -381,10 +398,10 @@ struct LauncherView: View {
         .background(Glass(cornerRadius: 16, fill: 0.14, stroke: 0.2))
     }
 
-    private func capsuleIcon(_ symbol: String, on: Bool, tint: Color = .white) -> some View {
-        Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(tint)
+    private func capsuleIcon(_ symbol: String, on: Bool, tint: Color? = nil) -> some View {
+        Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(tint ?? theme.ink)
             .frame(width: 30, height: 26)
-            .background(Capsule().fill(.white.opacity(on ? 0.22 : 0)))
+            .background(Capsule().fill(theme.ink.opacity(on ? 0.22 : 0)))
             .contentShape(Capsule())
     }
 
@@ -400,7 +417,7 @@ struct LauncherView: View {
                     .font(.system(size: 15, weight: .semibold))
                 Text(why == .otherUser ? LockedMac.line(mac: page.macName, why: why)
                                        : "Unlock it to see its apps and windows here.")
-                    .font(.system(size: 13)).foregroundStyle(.white.opacity(0.75))
+                    .font(.system(size: 13)).foregroundStyle(theme.ink.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -422,15 +439,15 @@ struct LauncherView: View {
                     Label("\(page.macName) is locked", systemImage: "lock.fill")
                         .font(.system(size: 17, weight: .bold))
                     Text("Open its Desktop and type your password on the lock screen. Its apps and windows show here once it’s unlocked.")
-                        .font(.system(size: 13)).foregroundStyle(.white.opacity(0.75))
+                        .font(.system(size: 13)).foregroundStyle(theme.ink.opacity(0.75))
                         .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 7) {
                         Image(systemName: "lock.open.fill").font(.system(size: 13))
                         Text("Unlock Desktop").font(.system(size: 13, weight: .semibold))
                     }
-                    .foregroundStyle(Color(red: 0.09, green: 0.13, blue: 0.23))
+                    .foregroundStyle(theme.onPill)
                     .padding(.horizontal, 16).frame(height: 32)
-                    .background(Capsule().fill(.white))
+                    .background(Capsule().fill(theme.pill))
                     .padding(.top, 6)
                 }
                 Spacer(minLength: 0)
@@ -453,7 +470,7 @@ struct LauncherView: View {
                 .font(.system(size: 15, weight: .medium))
             if !query.isEmpty {
                 Text("Apps, window titles and display names are searched.")
-                    .font(.system(size: 13)).foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 13)).foregroundStyle(theme.ink.opacity(0.7))
             }
             Spacer()
         }
@@ -478,7 +495,7 @@ struct LauncherView: View {
         ZStack { RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.92)); inside() }
             .frame(width: 206, height: 124)
             .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color(red: 0.5, green: 0.69, blue: 1), lineWidth: open ? 3 : 0))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(theme.ring, lineWidth: open ? 3 : 0))
             .shadow(color: .black.opacity(0.3), radius: 15, y: 10)
     }
 
@@ -528,9 +545,9 @@ struct LauncherView: View {
                         Button { actions.open(.app(a.bundleID)) } label: {
                             VStack(spacing: 5) {
                                 appIcon(a.bundleID, name: a.name, size: 52)
-                                Text(a.name).font(.system(size: 11)).foregroundStyle(.white.opacity(0.92))
+                                Text(a.name).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.92))
                                     .lineLimit(1).truncationMode(.tail).frame(width: 72)
-                                Circle().fill(.white.opacity(a.running ? 1 : 0)).frame(width: 4, height: 4)
+                                Circle().fill(theme.ink.opacity(a.running ? 1 : 0)).frame(width: 4, height: 4)
                             }
                         }
                         .buttonStyle(LauncherTileStyle(padding: 2))
@@ -550,9 +567,9 @@ struct LauncherView: View {
                 Image(systemName: "star")
                 Text("Right-click an app to add it to Favourites.")
             }
-            .font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+            .font(.system(size: 12)).foregroundStyle(theme.ink.opacity(0.7))
             .padding(.horizontal, 16).frame(height: 44)
-            .background(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
+            .background(RoundedRectangle(cornerRadius: 22).strokeBorder(theme.ink.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
         }
     }
 
@@ -566,9 +583,9 @@ struct LauncherView: View {
                         Image(systemName: "clock")
                         Text("Apps and Desktops you open from here show up here, the latest first.")
                     }
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 12)).foregroundStyle(theme.ink.opacity(0.7))
                     .padding(.horizontal, 16).frame(height: 44)
-                    .background(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
+                    .background(RoundedRectangle(cornerRadius: 22).strokeBorder(theme.ink.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 84, maximum: 110), spacing: 4)], spacing: 10) {
                         ForEach(Array(model.recent.enumerated()), id: \.offset) { _, item in
@@ -592,12 +609,12 @@ struct LauncherView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(LinearGradient(colors: [Color(red: 0.24, green: 0.43, blue: 0.69), Color(red: 0.42, green: 0.29, blue: 0.55)],
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .overlay(Image(systemName: "menubar.dock.rectangle").font(.system(size: 22, weight: .light)))
+                    .overlay(Image(systemName: "menubar.dock.rectangle").font(.system(size: 22, weight: .light)).foregroundStyle(.white))
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.6), lineWidth: 1.5))
                     .frame(width: 52, height: 52)
                     .shadow(color: .black.opacity(0.25), radius: 5, y: 3)
-                Text(d.name).font(.system(size: 11)).foregroundStyle(.white.opacity(0.92)).lineLimit(1).truncationMode(.tail)
-                Circle().fill(.white.opacity(d.isOpen ? 0.85 : 0)).frame(width: 4, height: 4)
+                Text(d.name).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.92)).lineLimit(1).truncationMode(.tail)
+                Circle().fill(theme.ink.opacity(d.isOpen ? 0.85 : 0)).frame(width: 4, height: 4)
             }
             .frame(maxWidth: .infinity)
         }
@@ -629,9 +646,9 @@ struct LauncherView: View {
         let on = page.input.appOrder == order
         return Button { actions.setAppOrder(order) } label: {
             Text(title).font(.system(size: 11, weight: on ? .semibold : .regular))
-                .foregroundStyle(on ? Color(red: 0.09, green: 0.13, blue: 0.23) : .white.opacity(0.85))
+                .foregroundStyle(on ? theme.onPill : theme.ink.opacity(0.85))
                 .padding(.horizontal, 12).frame(height: 20)
-                .background(Capsule().fill(.white.opacity(on ? 0.9 : 0)))
+                .background(Capsule().fill(theme.pill.opacity(on ? 0.9 : 0)))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -643,8 +660,8 @@ struct LauncherView: View {
         Button { actions.open(.app(a.bundleID)) } label: {
             VStack(spacing: 6) {
                 appIcon(a.bundleID, name: a.name, size: 52)
-                Text(a.name).font(.system(size: 11)).foregroundStyle(.white.opacity(0.92)).lineLimit(1).truncationMode(.tail)
-                Circle().fill(.white.opacity(a.running ? 0.85 : 0)).frame(width: 4, height: 4)
+                Text(a.name).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.92)).lineLimit(1).truncationMode(.tail)
+                Circle().fill(theme.ink.opacity(a.running ? 0.85 : 0)).frame(width: 4, height: 4)
             }
             .frame(maxWidth: .infinity)
         }
@@ -675,7 +692,7 @@ struct LauncherView: View {
                                                         @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.75))
+                Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(theme.ink.opacity(0.75))
                 Spacer(minLength: 0)
                 trailing()
             }
@@ -687,7 +704,7 @@ struct LauncherView: View {
         VStack(spacing: 1) {
             Text(title).font(.system(size: 12, weight: .medium)).lineLimit(1).truncationMode(.tail)
             if let detail {
-                Text(detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.7)).lineLimit(1).truncationMode(.tail)
+                Text(detail).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.7)).lineLimit(1).truncationMode(.tail)
             }
         }
         .frame(maxWidth: 206)
@@ -720,12 +737,13 @@ private struct AppMenu: ViewModifier {
 
 /// The launcher's backdrop: two big soft glows on deep blue, a wallpaper seen through frosted glass.
 struct Backdrop: View {
+    @Environment(\.launcherTheme) private var theme
     var body: some View {
         GeometryReader { g in
             ZStack {
-                Color(red: 0.09, green: 0.13, blue: 0.23)
-                glow(Color(red: 0.18, green: 0.36, blue: 0.56), radius: 420).position(x: 180, y: 100)
-                glow(Color(red: 0.36, green: 0.25, blue: 0.48), radius: 460)
+                theme.base
+                glow(theme.glowA, radius: 420).position(x: 180, y: 100)
+                glow(theme.glowB, radius: 460)
                     .position(x: g.size.width - 150, y: g.size.height - 110)
             }
             .frame(width: g.size.width, height: g.size.height)
@@ -749,6 +767,7 @@ private struct UnlockTileStyle: ButtonStyle {
     private struct Tile: View {
         let configuration: ButtonStyleConfiguration
         @State private var hovering = false
+        @Environment(\.launcherTheme) private var theme
         var body: some View {
             configuration.label
                 .background(Glass(cornerRadius: 20, fill: hovering ? 0.16 : 0.10, stroke: hovering ? 0.28 : 0.18)
@@ -785,6 +804,7 @@ private struct LockScreenPicture: View {
                 .overlay(Circle().strokeBorder(.white.opacity(0.25)))
                 .padding(10)
         }
+        .foregroundStyle(.white)   // the picture's own colours, whatever the theme
         .frame(width: 250, height: 156)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.85), lineWidth: 3))
@@ -795,21 +815,23 @@ private struct LockScreenPicture: View {
 
 /// A frosted panel: a faint white fill with a hairline edge.
 struct Glass: View {
+    @Environment(\.launcherTheme) private var theme
     var cornerRadius: CGFloat
     var fill: Double
     var stroke: Double
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius).fill(.white.opacity(fill))
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(.white.opacity(stroke)))
+        RoundedRectangle(cornerRadius: cornerRadius).fill(theme.glass.opacity(min(fill * theme.glassBoost, 0.85)))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(theme.edge.opacity(stroke * theme.edgeScale)))
     }
 }
 
 /// A sidebar row's background: lit when selected, faint under the pointer.
 private struct SidebarHighlight: View {
+    @Environment(\.launcherTheme) private var theme
     let selected: Bool
     @State private var hovering = false
     var body: some View {
-        RoundedRectangle(cornerRadius: 9).fill(.white.opacity(selected ? 0.18 : hovering ? 0.08 : 0))
+        RoundedRectangle(cornerRadius: 9).fill(theme.ink.opacity(selected ? 0.18 : hovering ? 0.08 : 0))
             .onHover { hovering = $0 }
     }
 }
@@ -826,10 +848,11 @@ struct LauncherTileStyle: ButtonStyle {
         let configuration: ButtonStyleConfiguration
         let padding: CGFloat
         @State private var hovering = false
+        @Environment(\.launcherTheme) private var theme
         var body: some View {
             configuration.label
                 .padding(padding)
-                .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(hovering ? 0.1 : 0)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(theme.ink.opacity(hovering ? 0.1 : 0)))
                 .opacity(configuration.isPressed ? 0.6 : 1)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
                 .onHover { hovering = $0 }

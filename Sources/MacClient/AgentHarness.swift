@@ -239,6 +239,7 @@ enum AgentHarness {
             "connected": client.connected,
             "macName": client.macName,
             "page": app.launcher.page,
+            "theme": UserDefaults.standard.string(forKey: LauncherTheme.key) ?? "midnight",
             "query": LauncherQuery.current,
             "macs": client.macs.map(\.name),
             "locked": client.lockWhy.map { "\($0)" } ?? "",

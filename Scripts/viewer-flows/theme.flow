@@ -1,0 +1,23 @@
+# The launcher's three themes, from the Theme row in the sidebar's settings: each chosen, kept, and the
+# favourites left as they were (the runner's rule). Snapshots of each for a look.
+wait apps 30
+expect theme == midnight
+rightclick 853 326
+choose Add to Favourites
+snap theme-midnight.png
+click 110 539
+choose Graphite
+expect theme == graphite
+snap theme-graphite.png
+click 110 539
+choose Daylight
+expect theme == daylight
+snap theme-daylight.png
+expect launcher.favourites contains Calculator
+# Kept: a new launcher window comes up in it
+key esc
+launcher show
+expect theme == daylight
+click 110 539
+choose Midnight
+expect theme == midnight
