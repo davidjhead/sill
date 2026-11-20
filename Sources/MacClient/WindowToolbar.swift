@@ -14,6 +14,8 @@ import StreamProtocol
 /// - Quality: the quality, resolution and frame rate (the other Mac's, for every device).
 /// - Refresh: the other Mac makes its hidden displays again, where it has them.
 /// - Launcher.
+/// And at the left of them, only while the other Mac says the link can't carry the quality (LinkWarning),
+/// an orange warning whose menu says so and offers the quality it recommends.
 /// Main thread.
 final class WindowToolbar: NSObject, NSToolbarDelegate, NSMenuDelegate {
     private weak var window: StreamWindow?
@@ -25,12 +27,16 @@ final class WindowToolbar: NSObject, NSToolbarDelegate, NSMenuDelegate {
     private let qualityMenu = NSMenu()
     private let gestureMenu = NSMenu()
     private weak var refreshItem: NSToolbarItem?
+    private let warningMenu = NSMenu()
+    /// The link warning shown now (nil: no warning item).
+    private(set) var warning: AwayCopy.Callout?
 
     static let keys = NSToolbarItem.Identifier("sill.keys")
     static let gestures = NSToolbarItem.Identifier("sill.gestures")
     static let quality = NSToolbarItem.Identifier("sill.quality")
     static let refresh = NSToolbarItem.Identifier("sill.refresh")
     static let launcher = NSToolbarItem.Identifier("sill.launcher")
+    static let linkWarning = NSToolbarItem.Identifier("sill.linkWarning")
 
     init(window: StreamWindow, client: StreamClient, desktop: Bool) {
         self.window = window
@@ -45,6 +51,7 @@ final class WindowToolbar: NSObject, NSToolbarDelegate, NSMenuDelegate {
         keysButton.action = #selector(keysPressed)
         keysButton.setAccessibilityLabel("Command Keys to the Other Mac")
         qualityMenu.delegate = self
+        warningMenu.delegate = self
         gestureMenu.delegate = self
         let toolbar = NSToolbar(identifier: desktop ? "sill.stream.desktop" : "sill.stream.app")
         toolbar.delegate = self
@@ -61,7 +68,7 @@ final class WindowToolbar: NSObject, NSToolbarDelegate, NSMenuDelegate {
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { items }
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { items }
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { items + [Self.linkWarning] }
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
@@ -80,6 +87,16 @@ final class WindowToolbar: NSObject, NSToolbarDelegate, NSMenuDelegate {
             item.toolTip = "Refresh the picture: the other Mac makes Sill's hidden displays again (for a picture that stays black or wrong)."
             refreshItem = item
             showRefresh()
+            return item
+        case Self.linkWarning:
+            let item = NSMenuToolbarItem(itemIdentifier: id)
+            let config = NSImage.SymbolConfiguration(paletteColors: [.white, .systemOrange])
+            item.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "The link can't keep up")?
+                .withSymbolConfiguration(config)
+            item.label = "Link Warning"
+            item.toolTip = warning?.text
+            item.showsIndicator = false
+            item.menu = warningMenu
             return item
         case Self.launcher:
             let item = button(id, "square.grid.3x3", "Show All Apps and Windows", #selector(launcherPressed))
@@ -124,6 +141,21 @@ final class WindowToolbar: NSObject, NSToolbarDelegate, NSMenuDelegate {
             ? "⌘Tab, ⌘Space and the other shortcuts go to \(client.macName) while this window has the keyboard. Click to keep them on this Mac."
             : "Send ⌘Tab, ⌘Space and the other shortcuts macOS keeps to \(client.macName) while this window has the keyboard"
         showRefresh()
+        showWarning()
+    }
+
+    /// The link warning's item, there only while the other Mac says the link is behind.
+    private func showWarning() {
+        guard let toolbar = window?.toolbar else { return }
+        let now = LinkWarning.callout(client)
+        let index = toolbar.items.firstIndex { $0.itemIdentifier == Self.linkWarning }
+        warning = now
+        if now != nil, index == nil {
+            toolbar.insertItem(withItemIdentifier: Self.linkWarning, at: 1)   // after the flexible space
+        } else if now == nil, let index {
+            toolbar.removeItem(at: index)
+        }
+        toolbar.items.first { $0.itemIdentifier == Self.linkWarning }?.toolTip = now?.text
     }
 
     /// The refresh button only where the other Mac has hidden displays (greyed out before macOS 15).
@@ -164,6 +196,16 @@ final class WindowToolbar: NSObject, NSToolbarDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        if menu === warningMenu {
+            let text = NSMenuItem(title: warning?.text ?? "The link keeps up again.", action: nil, keyEquivalent: "")
+            text.isEnabled = false
+            menu.addItem(text)
+            if let button = warning?.button {
+                menu.addItem(.separator())
+                menu.addItem(ToolbarMenuItem(button.title) { [client] in client.changeSettings(button.change) })
+            }
+            return
+        }
         if menu === gestureMenu {
             let gestures: [(String, TrackpadGestures.Gesture, Int)] = [
                 ("Mission Control", .swipeUp, 3), ("App Exposé", .swipeDown, 3), ("Previous Space", .swipeRight, 3),

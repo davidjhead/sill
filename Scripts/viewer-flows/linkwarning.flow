@@ -1,0 +1,17 @@
+# The other Mac's word that the link can't carry the quality (LinkWarning), faked here (a loopback
+# host never falls behind): the launcher's banner and a window's toolbar warning say so and offer the
+# quality it recommends; the banner's button sends it; both go once the link keeps up.
+wait apps 30
+expect linkWarning.button !contains Use
+linkwarning behind
+expect linkWarning.button == Use Low
+snap linkwarning-launcher.png
+click 846 94
+expect stream.bitrate == 4000000
+click 75 242
+wait stream 15
+expect streamWindows.0.toolbar contains sill.linkWarning
+snap linkwarning-window.png all
+linkwarning clear
+expect linkWarning.button !contains Use
+expect streamWindows.0.toolbar !contains sill.linkWarning

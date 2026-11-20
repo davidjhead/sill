@@ -111,6 +111,10 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         client.$macName.removeDuplicates().sink { [weak self] _ in
             DispatchQueue.main.async { self?.updateToolbars() }
         }.store(in: &subscriptions)
+        // The link warning (LinkWarning) comes and goes with the other Mac's settings reports.
+        client.$settings.map { $0.host?.link }.removeDuplicates().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.updateToolbars() }
+        }.store(in: &subscriptions)
         // The person at the other Mac took these windows back: they close here (and may be opened again).
         client.onTakenBack = { [weak self] ids in
             guard let self else { return }
@@ -398,7 +402,7 @@ final class StreamWindows: NSObject, NSWindowDelegate {
     }
 
     /// Every window's toolbar as things are now (the refresh button, the Mac's name).
-    private func updateToolbars() {
+    func updateToolbars() {
         for window in open.values { window.toolbarController?.update() }
     }
 

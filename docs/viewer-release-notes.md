@@ -107,6 +107,11 @@ One window for everything the other Mac offers, opened on connecting and by Sill
   Control, App Exposé, Spaces, Show Desktop), **Quality** (quality, resolution, frame rate), **Refresh**
   (where the other Mac has hidden displays) and the **launcher**. In full screen it hides with the menu
   bar.
+- **When the link can't keep up**: if the other Mac says the network can't carry the chosen quality
+  (it holds frames back, so the picture falls seconds behind and opening apps waits too), the launcher
+  shows **Pictures are falling behind** with the quality it recommends one click away ("Use Low"),
+  and each window's toolbar shows an orange warning with the same choice. Both go once the link keeps
+  up. Ultra and Extreme are for a cable or very fast network.
 - **⌘ keys**: ⌘Tab, ⌘Space and the other shortcuts macOS keeps go to the other Mac while that window
   has the keyboard; the button lights up and reads "Keys to <Mac>". It is that window's own, and stays
   on until turned off, but it pauses whenever another window or app has the keyboard: click away and

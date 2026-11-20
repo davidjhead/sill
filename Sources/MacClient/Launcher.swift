@@ -110,6 +110,7 @@ final class Launcher: NSObject, NSWindowDelegate {
             setQuality: { [weak self] in self?.app.client.changeSettings(HostSettingsChange(bitrate: $0)) },
             setMaxFPS: { [weak self] in self?.app.client.changeSettings(HostSettingsChange(maxFPS: $0)) },
             setCaptureScale: { [weak self] in self?.app.client.changeSettings(HostSettingsChange(captureScale: $0)) },
+            applySettings: { [weak self] in self?.app.client.changeSettings($0) },
             setSendAudio: { [weak self] in self?.app.client.changeSettings(HostSettingsChange(sendAudio: $0)) },
             toggleMute: { [weak self] in self?.app.toggleMute() },
             toggleCapture: { SystemKeyTap.shared.enabled.toggle() },
@@ -248,7 +249,8 @@ private struct LiveLauncher: View {
                                             captureOn: SystemKeyTap.shared.enabled),
             locked: client.lockView ? nil : client.lockWhy,
             macs: client.macs.map { LauncherPage.MacRow(id: $0.id, name: $0.name, word: $0.word, current: Launcher.isCurrent($0, client)) },
-            showsNearby: client.showsNearbyHint && !client.searchingNearby)
+            showsNearby: client.showsNearbyHint && !client.searchingNearby,
+            linkWarning: LinkWarning.callout(client))
         var actions = launcher.actions
         let mute = actions.toggleMute, capture = actions.toggleCapture
         actions.toggleMute = { mute(); ownSwitches += 1 }

@@ -30,6 +30,7 @@ import StreamProtocol
 ///   dockicon <path>       the Desktop's Dock icon as a PNG
 ///   toolbar keys|launcher|refresh [window]   a stream window's toolbar button
 ///   capture on|off        the launcher's Capture shortcuts switch, for every window
+///   linkwarning behind|clear   the other Mac's link report faked: can't carry Extreme, or keeping up
 ///   statusmenu favourites|recent <title>   an item of the menu bar menu's Favourites or Recent chosen
 ///   fakemacs              sample Mac rows for the welcome page and the switcher
 ///   quit
@@ -211,6 +212,18 @@ enum AgentHarness {
             guard let w = target as? StreamWindow, let bar = w.toolbarController else { return fail("no stream window") }
             guard bar.pressForTest(words[1]) else { return fail("no toolbar button “\(words[1])”") }
             settle { ok(state(app)) }
+        case "linkwarning":
+            // linkwarning behind|clear: the other Mac's link report as though it said the link can't
+            // carry Extreme (recommending Low), or keeps up (LinkWarning.testLink).
+            if words.dropFirst().first == "behind" {
+                LinkWarning.testLink = LinkReport(state: LinkReport.behind, withheldPerSecond: 28, bitrate: QualityPreset.extreme.rawValue,
+                                                  carriedKbps: 13_500, suggestedBitrate: QualityPreset.low.rawValue)
+            } else {
+                LinkWarning.testLink = nil
+            }
+            app.client.objectWillChange.send()
+            app.windows.updateToolbars()
+            settle { ok(state(app)) }
         case "capture":
             // capture on|off: the launcher's Capture shortcuts switch (every open window follows).
             SystemKeyTap.shared.enabled = words.dropFirst().first == "on"
@@ -295,6 +308,7 @@ enum AgentHarness {
             "active": "\(client.active)",
             "stream": ["bitrate": client.settings.displayed?.bitrate ?? 0, "maxFPS": client.settings.displayed?.maxFPS ?? 0,
                        "resolution": client.settings.displayed.map { LauncherView.scaleName($0.captureScale) } ?? ""],
+            "linkWarning": LinkWarning.callout(client).map { ["text": $0.text, "button": $0.button?.title ?? ""] } ?? ["text": "", "button": ""],
             "sound": ["sendAudio": client.settings.displayed?.sendAudio.map { $0 ? "on" : "off" } ?? "none",
                       "muted": AudioPlayer.muted, "frames": app.audio.framesDecoded],
             "counts": ["apps": client.apps.count, "windows": client.windows.count, "icons": client.icons.count],

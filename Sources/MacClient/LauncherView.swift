@@ -35,6 +35,9 @@ struct LauncherPage: Equatable {
     /// The Macs this one can reach (the network's and the saved ones), for the switcher on the Mac's name.
     var macs: [MacRow] = []
     var showsNearby = false
+    /// The other Mac says the link can't carry the quality (LinkWarning): what to say, and the lower
+    /// quality it recommends, as the iPhone's callout has it.
+    var linkWarning: AwayCopy.Callout? = nil
 
     struct MacRow: Equatable {
         var id: String          // FoundMac.id
@@ -53,6 +56,8 @@ struct LauncherActions {
     var setQuality: (Int) -> Void = { _ in }
     var setMaxFPS: (Int) -> Void = { _ in }
     var setCaptureScale: (Double) -> Void = { _ in }
+    /// The link warning's button: the quality the other Mac recommends.
+    var applySettings: (HostSettingsChange) -> Void = { _ in }
     var setSendAudio: (Bool) -> Void = { _ in }
     var toggleMute: () -> Void = {}
     var toggleCapture: () -> Void = {}
@@ -359,6 +364,7 @@ struct LauncherView: View, Equatable {
     private func content(_ model: LauncherModel) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             topBar
+            if let warning = page.linkWarning, page.locked == nil { linkBanner(warning) }
             if let why = page.locked {
                 if why == .screenLocked, let desktop = model.desktops.first {
                     unlockTile(desktop)
@@ -543,6 +549,34 @@ struct LauncherView: View, Equatable {
         .help("Open \(page.macName)’s Desktop to unlock it")
         .accessibilityLabel("\(page.macName) is locked. Unlock Desktop")
         .accessibilityHint("Opens its Desktop, where you type your password on the lock screen.")
+    }
+
+    /// The other Mac can't send this quality over the link (LinkWarning): why, and its recommended
+    /// quality one click away. Gone once the link keeps up.
+    private func linkBanner(_ warning: AwayCopy.Callout) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 16)).foregroundStyle(theme.warn)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Pictures are falling behind").font(.system(size: 13, weight: .semibold))
+                Text(warning.text).font(.system(size: 12)).foregroundStyle(theme.ink.opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            if let button = warning.button {
+                Button { actions.applySettings(button.change) } label: {
+                    Text(button.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(theme.onPill)
+                        .padding(.horizontal, 14).frame(height: 28)
+                        .background(Capsule().fill(theme.pill)).contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(button.spoken)
+                .help("Lower the quality on \(page.macName) for every device")
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Glass(cornerRadius: 14, fill: 0.12, stroke: 0.18))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(theme.warn.opacity(0.55)))
+        .accessibilityElement(children: .contain)
     }
 
     private var emptyState: some View {
