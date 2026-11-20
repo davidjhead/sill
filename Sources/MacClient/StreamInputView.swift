@@ -227,13 +227,22 @@ final class StreamInputView: NSView {
         addCursorRect(rect, cursor: Self.cursor(for: client.cursorShape))
     }
 
-    /// The other Mac's cursor shape as this Mac's cursor, at the same size in points.
+    /// The other Mac's cursor shape as this Mac's cursor, at the same size in points. Made once per
+    /// shape: it is asked for on every pointer move (`setCursor`), which copied the image and made a new
+    /// NSCursor 120 times a second.
     static func cursor(for shape: StreamClient.CursorShape?) -> NSCursor {
         guard let shape, shape.size.width > 0, shape.size.height > 0 else { return .arrow }
-        let image = shape.image.copy() as! NSImage
+        if let made = madeCursor, made.image === shape.image, made.size == shape.size, made.hotspot == shape.hotspot {
+            return made.cursor
+        }
+        guard let image = shape.image.copy() as? NSImage else { return .arrow }
         image.size = shape.size
-        return NSCursor(image: image, hotSpot: shape.hotspot)
+        let cursor = NSCursor(image: image, hotSpot: shape.hotspot)
+        madeCursor = (shape.image, shape.size, shape.hotspot, cursor)
+        return cursor
     }
+    /// The last shape's cursor (main thread).
+    private static var madeCursor: (image: NSImage, size: CGSize, hotspot: CGPoint, cursor: NSCursor)?
 
     // MARK: The pointer
 
@@ -519,46 +528,87 @@ extension StreamInputView {
         return true
     }
 
-    /// The files' parts, then the drop at `at` (a fraction of the picture). Off the main thread.
+    /// The files' parts, then the drop at `at` (a fraction of the picture). Off the main thread. Files
+    /// that could not go are named in an alert on the window they were dropped on.
     static func send(_ urls: [URL], at: CGPoint, client: StreamClient, window: UInt32? = nil) {
         DispatchQueue.global(qos: .userInitiated).async {
-            let (ids, folders, total) = upload(urls, client: client)
-            guard !ids.isEmpty else { return }
-            client.send(.fileDrop, payload: Wire.encode(FileDrop(files: ids, x: Double(at.x), y: Double(at.y), window: window,
-                                                                  folders: folders.isEmpty ? nil : folders)))
-            print("files: dropped \(ids.count) at \(at), \(total) bytes")
+            let result = upload(urls, client: client)
+            if !result.skipped.isEmpty { DispatchQueue.main.async { tellSkipped(result.skipped) } }
+            guard !result.ids.isEmpty else { return }
+            client.send(.fileDrop, payload: Wire.encode(FileDrop(files: result.ids, x: Double(at.x), y: Double(at.y), window: window,
+                                                                  folders: result.folders.isEmpty ? nil : result.folders)))
+            print("files: dropped \(result.ids.count) at \(at), \(result.total) bytes")
         }
     }
 
+    /// A file that did not go across, and why, in words for the alert.
+    struct Skipped { let name: String; let why: String }
+
+    /// How much may wait to go to the other Mac before the next part of a file is sent: the parts go as
+    /// fast as the link takes them, not as fast as the disk reads, so the video and input behind them on
+    /// the same connection keep flowing and memory stays small (`StreamClient.sendBacklog`).
+    static let backlogLimit = 2 << 20
+    /// How long a part waits for the link before the drop gives up (the other Mac gone, the link stuck).
+    static let stallLimit: TimeInterval = 30
+
     /// Each file in parts (kind 34), a folder as one zip (FolderZip, unpacked on the other Mac, the
-    /// zip removed here after): their IDs, those of the folders, and the bytes sent. Blocks: call it
-    /// off the main thread.
-    static func upload(_ urls: [URL], client: StreamClient) -> (ids: [UInt32], folders: [UInt32], total: UInt64) {
+    /// zip removed here after): their IDs, those of the folders, the bytes sent, and the files that did
+    /// not go with why. Blocks: call it off the main thread.
+    static func upload(_ urls: [URL], client: StreamClient) -> (ids: [UInt32], folders: [UInt32], total: UInt64, skipped: [Skipped]) {
         var ids: [UInt32] = []
         var folders: [UInt32] = []
+        var skipped: [Skipped] = []
         var total: UInt64 = 0
         for original in urls {
             let isFolder = (try? original.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-            guard let url = isFolder ? FolderZip.zip(original) : original else { continue }
+            guard let url = isFolder ? FolderZip.zip(original) : original else {
+                skipped.append(Skipped(name: original.lastPathComponent, why: "the folder could not be packed")); continue
+            }
             defer { if isFolder { try? FileManager.default.removeItem(at: url) } }
             guard let handle = try? FileHandle(forReadingFrom: url),
-                  let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(UInt64.init),
-                  total + size <= FileChunk.maxTotal else { continue }
-            total += size
+                  let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(UInt64.init) else {
+                skipped.append(Skipped(name: original.lastPathComponent, why: "it could not be read")); continue
+            }
+            guard total + size <= FileChunk.maxTotal else {
+                skipped.append(Skipped(name: original.lastPathComponent,
+                                       why: "one drop takes up to \(FileChunk.maxTotal >> 20) MB in all")); continue
+            }
             let id = UInt32.random(in: 1...UInt32.max)
-            if isFolder { folders.append(id) }
             let name = isFolder ? original.lastPathComponent + ".zip" : url.lastPathComponent
             var offset: UInt64 = 0
+            var failure: String?
             repeat {
-                let bytes = (try? handle.read(upToCount: FileChunk.maxBytes)) ?? Data()
+                guard client.connected else { failure = "the other Mac disconnected"; break }
+                // Wait for the link to take what is already on its way.
+                let waitStart = Date()
+                while client.sendBacklog > backlogLimit {
+                    if Date().timeIntervalSince(waitStart) > stallLimit { failure = "the link stopped taking it"; break }
+                    usleep(5_000)
+                }
+                if failure != nil { break }
+                let bytes: Data
+                do { bytes = try handle.read(upToCount: FileChunk.maxBytes) ?? Data() } catch { failure = "it could not be read"; break }
                 client.send(.fileChunk, payload: FileChunk.pack(id: id, name: name, total: size, offset: offset, bytes: bytes))
                 offset += UInt64(bytes.count)
                 if bytes.isEmpty { break }
             } while offset < size
             try? handle.close()
+            if let failure { skipped.append(Skipped(name: original.lastPathComponent, why: failure)); continue }
+            total += size
+            if isFolder { folders.append(id) }
             ids.append(id)
         }
-        return (ids, folders, total)
+        return (ids, folders, total, skipped)
+    }
+
+    /// The files that did not go, named in an alert on the front window (main thread).
+    static func tellSkipped(_ skipped: [Skipped]) {
+        let alert = NSAlert()
+        alert.messageText = skipped.count == 1 ? "“\(skipped[0].name)” was not sent" : "\(skipped.count) files were not sent"
+        alert.informativeText = skipped.prefix(6).map { "\($0.name): \($0.why)" }.joined(separator: "\n")
+            + (skipped.count > 6 ? "\n…and \(skipped.count - 6) more." : "")
+        alert.alertStyle = .warning
+        if let window = NSApp.keyWindow ?? NSApp.mainWindow { alert.beginSheetModal(for: window) } else { alert.runModal() }
     }
 }
 
@@ -671,7 +721,16 @@ final class FilePromises: NSObject, NSFilePromiseProviderDelegate, @unchecked Se
         lock.lock()
         guard var w = writing[c.id], c.offset == w.written else { lock.unlock(); return }
         if c.offset == 0 { w.total = c.total }   // the size as sent: a folder's zip is only known then
-        w.handle.write(c.bytes)
+        // The throwing write: the old `write(_:)` raised an Objective-C exception on a full disk or a
+        // volume gone, which ended the app; now the drag fails as Finder reports any failed copy.
+        do {
+            try w.handle.write(contentsOf: c.bytes)
+        } catch {
+            lock.unlock()
+            print("files: writing \(w.url.lastPathComponent) failed: \(error.localizedDescription)")
+            finish(c.id, error)
+            return
+        }
         w.written += UInt64(c.bytes.count)
         writing[c.id] = w
         let complete = w.written >= w.total

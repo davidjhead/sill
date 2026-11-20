@@ -155,6 +155,8 @@ private struct LiveLauncher: View {
     @ObservedObject var connectPage: ConnectPage
     let launcher: Launcher
     @State private var ownSwitches = 0
+    /// The status line, drawn apart from the page (LauncherView's ==).
+    @StateObject private var liveStatus = LauncherStatus()
     @AppStorage(LauncherTheme.key) private var themeID = LauncherTheme.midnight.id.rawValue
 
     var body: some View {
@@ -190,9 +192,15 @@ private struct LiveLauncher: View {
         let sound = actions.toggleSound, capture = actions.toggleCapture
         actions.toggleSound = { sound(); ownSwitches += 1 }
         actions.toggleCapture = { capture(); ownSwitches += 1 }
-        return LauncherView(page: page, actions: actions)
-            .onAppear { launcher.setTitle(page.macName, subtitle: page.status) }
-            .onChange(of: page.macName + "\n" + page.status) { launcher.setTitle(page.macName, subtitle: page.status) }
+        return LauncherView(page: page, actions: actions, liveStatus: liveStatus).equatable()
+            .onAppear {
+                liveStatus.text = page.status
+                launcher.setTitle(page.macName, subtitle: page.status)
+            }
+            .onChange(of: page.macName + "\n" + page.status) {
+                liveStatus.text = page.status
+                launcher.setTitle(page.macName, subtitle: page.status)
+            }
     }
 }
 

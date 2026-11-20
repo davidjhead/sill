@@ -15,7 +15,7 @@ swift build --product SillClient > "$out/build-debug.log" 2>&1 || { echo "FAIL: 
 step "release build (the host the harness runs, and the app)"
 swift build -c release > "$out/build-release.log" 2>&1 || { echo "FAIL: release build ($out/build-release.log)"; exit 1; }
 step "pure checks"
-Tests/checks/run-all.sh launcher main-router display-wake repo-rules 2>&1 | tee "$out/checks.log" | tail -6
+Tests/checks/run-all.sh launcher sample-ring main-router display-wake repo-rules 2>&1 | tee "$out/checks.log" | tail -6
 grep -q "^All passed" "$out/checks.log" || fail=1
 step "flows"
 Scripts/viewer_agent.py run "$out" Scripts/viewer-flows/*.flow > "$out/flows.log" 2>&1 || fail=1

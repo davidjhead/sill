@@ -21,9 +21,15 @@ import StreamProtocol
 /// asked (a window's ID, a menu item's title) but can neither forge a request nor replay one.
 final class DockProxies {
     /// An app's windows open here, and its Dock badge on the other Mac.
-    struct AppWindows { let name: String; let icon: NSImage?; let windows: [Window]; var badge: String? = nil }
+    struct AppWindows: Equatable {
+        let name: String; let icon: NSImage?; let windows: [Window]; var badge: String? = nil
+        /// The same icon object: a new one comes as a new image.
+        static func == (a: AppWindows, b: AppWindows) -> Bool {
+            a.name == b.name && a.icon === b.icon && a.windows == b.windows && a.badge == b.badge
+        }
+    }
     /// A window in the Dock menu: the app's front one gets a ✓, as macOS marks its own.
-    struct Window {
+    struct Window: Equatable {
         enum State: String { case front, minimized, other }
         let id: UInt32
         let title: String
@@ -110,10 +116,14 @@ final class DockProxies {
         planned = apps.values.map(\.name).sorted()
         let wanted = Self.enabled ? apps : [:]
         for app in Set(last.keys).subtracting(wanted.keys) { quit(app) }
+        let before = last
         last = wanted
         for (app, info) in wanted {
             if let r = running[app], !r.isTerminated {
-                if !iconWritten.contains(app), let icon = info.icon { writeIcon(app, icon) } else { post(app) }
+                if !iconWritten.contains(app), let icon = info.icon { writeIcon(app, icon) }
+                // Told only of a change: each telling rewrites its state file and posts a notification
+                // every process can see, and a sync comes with every list, icon and focus change.
+                else if before[app] != info { post(app) }
                 continue
             }
             launch(app, info)
@@ -253,8 +263,9 @@ final class DockProxies {
         sign.arguments = ["--force", "--sign", "-", app.path]
         sign.standardOutput = FileHandle.nullDevice
         sign.standardError = FileHandle.nullDevice
-        try? sign.run()
-        sign.waitUntilExit()
+        // Waited for only once it has started: waiting on a process that never launched raises an
+        // exception, which would end the app.
+        do { try sign.run(); sign.waitUntilExit() } catch { print("dock: codesign did not start: \(error.localizedDescription)") }
         try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: app.path)
         NSWorkspace.shared.noteFileSystemChanged(app.path)
     }
@@ -321,8 +332,6 @@ final class DockProxies {
         }
     }
 
-    /// The remote app's icon with Sill Viewer's own in its lower right corner, so its Dock icon reads
-    /// as the other Mac's app, not this Mac's.
     /// The Desktop's own icon: a display on the launcher's blue-to-purple, in macOS's icon shape. Badged
     /// with Sill Viewer's corner like the apps' (`badged`), where it is shown.
     static let desktopIcon: NSImage = NSImage(size: NSSize(width: 512, height: 512), flipped: false) { rect in
@@ -342,6 +351,8 @@ final class DockProxies {
         return true
     }
 
+    /// The remote app's icon with Sill Viewer's own in its lower right corner, so its Dock icon reads
+    /// as the other Mac's app, not this Mac's.
     static func badged(_ icon: NSImage) -> NSImage {
         let side = 512
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8,

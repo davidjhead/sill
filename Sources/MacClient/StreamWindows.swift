@@ -344,8 +344,20 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         return true
     }
 
-    /// The Dock icons follow the windows open here, by app.
+    /// The Dock icons follow the windows open here, by app: once per turn of the run loop, however many
+    /// asked (connecting brings an icon each for a hundred apps, and every list, focus and badge asks).
     private func syncDock() {
+        guard !dockSyncQueued else { return }
+        dockSyncQueued = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.dockSyncQueued = false
+            self.syncDockNow()
+        }
+    }
+    private var dockSyncQueued = false
+
+    private func syncDockNow() {
         var apps: [String: DockProxies.AppWindows] = [:]
         var byApp: [String: [DockProxies.Window]] = [:]
         // Each app's front window (the Dock's ✓): the first of its windows here in this Mac's order.
@@ -532,11 +544,11 @@ final class StreamWindows: NSObject, NSWindowDelegate {
             guard case .window(let id) = source else { continue }
             if DesktopWindow.display(of: id) != nil {
                 // A Desktop window: closes once its display is gone from the other Mac.
-                if display(of: source) == nil, !client.hostDisplays.isEmpty { window.close() } else { window.title = title(source) }
+                if display(of: source) == nil, !client.hostDisplays.isEmpty { window.close() } else { setTitle(window, title(source)) }
                 continue
             }
             if ids.contains(id) {
-                window.title = title(source)
+                setTitle(window, title(source))
             } else {
                 window.close()
             }
@@ -545,8 +557,13 @@ final class StreamWindows: NSObject, NSWindowDelegate {
 
     private func thumbnailsChanged(_ thumbs: [UInt32: NSImage]) {
         for (source, window) in open where source != showing {
-            if case .window(let id) = source, let image = thumbs[id] { window.placeholder.image = image }
+            if case .window(let id) = source, let image = thumbs[id], window.placeholder.image !== image { window.placeholder.image = image }
         }
+    }
+
+    /// A window's title, set only when it changed: every list from the other Mac sets them all.
+    private func setTitle(_ window: NSWindow, _ title: String) {
+        if window.title != title { window.title = title }
     }
 
     /// The stream view goes into `source`'s window, with the window's own viewport: a window

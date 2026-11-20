@@ -62,7 +62,8 @@ final class LiveDrop {
             windowLog("live drag \(id): \(urls.count) file\(urls.count == 1 ? "" : "s") from this Mac, sending")
             let client = self.client
             DispatchQueue.global(qos: .userInitiated).async {
-                let (ids, folders, total) = StreamInputView.upload(urls, client: client)
+                let (ids, folders, total, skipped) = StreamInputView.upload(urls, client: client)
+                if !skipped.isEmpty { DispatchQueue.main.async { StreamInputView.tellSkipped(skipped) } }
                 client.send(.liveDrag, payload: Wire.encode(LiveDrag(id: id, phase: LiveDrag.filesSent, files: ids,
                                                                      folders: folders.isEmpty ? nil : folders)))
                 windowLog("live drag \(id): \(ids.count) sent, \(total) bytes")

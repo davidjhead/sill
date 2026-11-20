@@ -5,9 +5,11 @@ import StreamProtocol
 /// What the launcher shows besides its sections: the other Mac, its icons and window pictures, and its
 /// settings as the status item's menu has them. Plain data, so the view renders without a session
 /// (LauncherPreview).
-struct LauncherPage {
-    struct Settings {
-        var qualities: [(name: String, bitrate: Int)] = QualityPreset.allCases.map { ($0.name, $0.rawValue) }
+struct LauncherPage: Equatable {
+    struct Quality: Equatable { var name: String; var bitrate: Int }
+
+    struct Settings: Equatable {
+        var qualities: [Quality] = QualityPreset.allCases.map { Quality(name: $0.name, bitrate: $0.rawValue) }
         var bitrate: Int?                         // nil: the settings are not read yet
         var maxFPS: Int?
         var fpsChoices: [Int] = SettingsChoices.maxFPS
@@ -60,14 +62,29 @@ struct LauncherActions {
 /// shelf, and every app in a grid (a dot under the running ones; A to Z or most recent first; a
 /// right-click adds one to the favourites or takes it out).
 ///
+/// Equatable by its page: the session publishes a second's link statistics, a thumbnail or an icon of a
+/// window not shown here, and with `.equatable()` (LiveLauncher) a page that comes out the same skips
+/// this body, the model's sorting and every tile's diff. The actions are the launcher's and do not
+/// change.
+///
 /// The sidebar hides and comes back with the button beside the title or Control-Command-S, remembered
 /// for every launcher; while it is hidden the Desktops join the open windows and the settings sit in a
 /// capsule at the top right. The window's own title bar is see-through, its buttons over the sidebar.
-struct LauncherView: View {
+struct LauncherView: View, Equatable {
+    /// The page, its status line aside: that changes with the frame rate most seconds, and is drawn by
+    /// its own view from `liveStatus`, so a second's statistics redraw that line and nothing else.
+    static func == (a: LauncherView, b: LauncherView) -> Bool {
+        var x = a.page, y = b.page
+        x.status = ""; y.status = ""
+        return x == y && a.liveStatus === b.liveStatus
+    }
+
     enum Pane: Hashable { case home, favourites, apps }
 
     let page: LauncherPage
     let actions: LauncherActions
+    /// The status line as it changes (LiveLauncher keeps it); `page.status` until one is given.
+    var liveStatus: LauncherStatus? = nil
     @State private var query = ""
     @State private var pane = Pane.home
     @AppStorage("launcher.sidebarHidden") private var sidebarHidden = false
@@ -78,6 +95,9 @@ struct LauncherView: View {
     private var model: LauncherModel { LauncherModel.make(page.input, query: query) }
 
     var body: some View {
+        #if DEBUG
+        let _ = { LauncherQuery.renders += 1 }()
+        #endif
         let model = self.model
         HStack(spacing: 10) {
             if !sidebarHidden {
@@ -160,7 +180,7 @@ struct LauncherView: View {
                     Text(page.macName).font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                     HStack(spacing: 5) {
                         Circle().fill(page.locked == nil ? theme.ok : theme.warn).frame(width: 6, height: 6)
-                        Text(page.status).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.72)).lineLimit(1)
+                        StatusText(status: liveStatus, fallback: page.status).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.72)).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
@@ -172,7 +192,7 @@ struct LauncherView: View {
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
         .help("Connect to another Mac, add one, or disconnect")
-        .accessibilityLabel("\(page.macName), \(page.status). Other Macs")
+        .accessibilityLabel("\(page.macName), \(liveStatus?.text ?? page.status). Other Macs")
     }
 
     private func paneRow(_ p: Pane, _ title: String, _ symbol: String) -> some View {
@@ -321,7 +341,7 @@ struct LauncherView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(title).font(.system(size: 22, weight: .bold)).lineLimit(1)
                 if sidebarHidden {
-                    Text(page.status).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.7)).lineLimit(1)
+                    StatusText(status: liveStatus, fallback: page.status).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.7)).lineLimit(1)
                 }
             }
             Spacer(minLength: 8)
@@ -711,9 +731,29 @@ struct LauncherView: View {
     }
 }
 
+/// The launcher's status line ("Connected · 60 fps", "Screen locked"), published apart from the page so
+/// only the views that show it redraw when it changes (LauncherView's ==).
+final class LauncherStatus: ObservableObject {
+    @Published var text = ""
+}
+
+/// The status line: `status`'s text as it changes, or `fallback` with none (a preview, the harness's
+/// renders of a page).
+private struct StatusText: View {
+    let status: LauncherStatus?
+    let fallback: String
+    var body: some View {
+        if let status { Observed(status: status) } else { Text(fallback) }
+    }
+    private struct Observed: View {
+        @ObservedObject var status: LauncherStatus
+        var body: some View { Text(status.text) }
+    }
+}
+
 #if DEBUG
 /// The launcher's search as typed, for the agent harness's `state` (AgentHarness).
-enum LauncherQuery { static var current = "" }
+enum LauncherQuery { static var current = ""; static var renders = 0 }
 #endif
 
 /// An app's right-click menu and its accessibility, the same in the grid and on the shelf.

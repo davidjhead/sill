@@ -40,6 +40,16 @@ final class ClipboardSync {
             self?.subscribed = false
             self?.updateSubscription()
         }
+        // This Mac's clipboard is looked at four times a second, only while a Mac is connected.
+        client.$connected.removeDuplicates().sink { [weak self] connected in
+            DispatchQueue.main.async { self?.watch(connected) }
+        }.store(in: &subscriptions)
+    }
+
+    private func watch(_ on: Bool) {
+        timer?.invalidate()
+        timer = nil
+        guard on else { return }
         let t = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in self?.sendIfChanged() }
         RunLoop.main.add(t, forMode: .common)
         timer = t

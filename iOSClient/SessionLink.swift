@@ -78,6 +78,22 @@ final class SessionLink {
     private var waiting: [Data] = []
     /// The old connections of hand-overs whose fence is down, until what waited has gone out.
     private var fencedOff: [NWConnection] = []
+    /// Bytes handed to the session's connection that it has not yet processed (`backlog`).
+    private var unsent = 0
+
+    /// What is still to go to the Mac, in bytes: handed to the session's connection and not yet processed
+    /// by it (what waits for a fence or the hold is not counted; it is small). A sender of bulk data (a Mac client's file drop) waits while
+    /// it is large, so the video and input behind it on the same connection are not held up and the
+    /// memory it takes stays small. Any queue.
+    var backlog: Int {
+        lock.lock(); defer { lock.unlock() }
+        return unsent
+    }
+
+    private func processed(_ bytes: Int) {
+        lock.lock(); unsent -= bytes; lock.unlock()
+    }
+
     /// Input messages counted for the session's connection: those handed to it since it became the
     /// session's, and those waiting to go out on it (see `inputsOnSession`).
     private var inputs = 0
@@ -117,8 +133,11 @@ final class SessionLink {
             if Self.isInput(data) { inputs += 1 }
             return
         }
-        current?.send(content: data, completion: .contentProcessed { _ in })
-        if current != nil, Self.isInput(data) { inputs += 1 }
+        guard let current else { return }
+        let bytes = data.count
+        unsent += bytes
+        current.send(content: data, completion: .contentProcessed { [weak self] _ in self?.processed(bytes) })
+        if Self.isInput(data) { inputs += 1 }
     }
 
     /// Whether `c` is still read: the session's connection, or the old one of a hand-over until its

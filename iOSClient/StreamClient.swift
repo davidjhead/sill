@@ -4083,6 +4083,10 @@ final class StreamClient: ObservableObject {
         link.send(message.serialized())
     }
 
+    /// The bytes still to go to the Mac on this session's connection (SessionLink.backlog): a sender of
+    /// bulk data waits while it is large. Any queue.
+    var sendBacklog: Int { link.backlog }
+
     /// A scroll or a hover over `window`, shown here but not the streamed one (a Mac client): only to a
     /// Mac that takes it. Moves at most 60 a second. Main thread.
     func sendWindowInput(_ window: UInt32, _ event: InputEvent) {
