@@ -206,7 +206,7 @@ enum AgentHarness {
             guard let item = items.first(where: { $0.title == title }), let action = item.action else { return fail("no item “\(title)”") }
             NSApp.sendAction(action, to: item.target, from: item)
             settle { ok() }
-
+        case "fakemacs":
             // Sample rows for the welcome page and the switcher (the harness never browses): a wired Mac,
             // one on Wi-Fi, a saved one away from home and one not paired. Picking one dials nothing real.
             app.client.macs = [
