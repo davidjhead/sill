@@ -1,0 +1,15 @@
+# Resolution in the sidebar's Quality menu, as an iPad's Settings panel has it: the other Mac's, for
+# every device. The test host starts at Retina; Standard is chosen, the host answers, and the row says
+# so; then back to Retina. The favourites are left as they were (the runner's rule).
+wait apps 30
+expect stream.resolution == Retina
+snap resolution-retina.png
+click 110 487
+choose Standard
+wait standard 5
+expect stream.resolution == Standard
+snap resolution-standard.png
+click 110 487
+choose Retina
+wait retina 5
+expect stream.resolution == Retina

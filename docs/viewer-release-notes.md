@@ -52,7 +52,9 @@ Devices, where it can be removed.
 ### The launcher
 One window for everything the other Mac offers, opened on connecting and by Sill Viewer's Dock icon.
 - **A sidebar** with the Mac and its connection, Home, Favourites, All Apps, the other Mac's Desktops
-  (one per display), its stream settings (Quality, Theme, Sound, Capture shortcuts) and Disconnect.
+  (one per display), its stream settings (Quality, Theme, Send Audio, Mute on This Mac, Capture
+  shortcuts) and Disconnect. The Quality menu holds the quality, the **Resolution** (Retina or
+  Standard, as on the iPad) and the frame rate; each is the other Mac's, for every device.
   Hide it with the sidebar button or **⌃⌘S**; while hidden, the settings are a row of icons at the top
   right and the Desktops join the open windows.
 - **Open windows** as large pictures, an open one outlined.

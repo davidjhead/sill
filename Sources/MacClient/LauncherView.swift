@@ -13,6 +13,9 @@ struct LauncherPage: Equatable {
         var bitrate: Int?                         // nil: the settings are not read yet
         var maxFPS: Int?
         var fpsChoices: [Int] = SettingsChoices.maxFPS
+        /// The other Mac's Resolution (its capture scale, for every device, as an iPad's panel sets it).
+        var captureScale: Double?
+        var scaleChoices: [Double] = SettingsChoices.captureScale
         /// The other Mac's Send Audio, for every device: nil for a Mac without sound (or no settings yet).
         var sendAudio: Bool?
         /// Mute on This Mac: this Mac's own, never sent.
@@ -49,6 +52,7 @@ struct LauncherActions {
     var setAppOrder: (LauncherModel.AppOrder) -> Void = { _ in }
     var setQuality: (Int) -> Void = { _ in }
     var setMaxFPS: (Int) -> Void = { _ in }
+    var setCaptureScale: (Double) -> Void = { _ in }
     var setSendAudio: (Bool) -> Void = { _ in }
     var toggleMute: () -> Void = {}
     var toggleCapture: () -> Void = {}
@@ -236,11 +240,11 @@ struct LauncherView: View, Equatable {
             if let bitrate = s.bitrate {
                 Menu { qualityItems(bitrate) } label: {
                     settingRow("Quality") {
-                        Text(qualityName(bitrate) + (s.maxFPS.map { " · \($0)" } ?? "")).fontWeight(.semibold)
+                        Text(qualitySummary(bitrate)).fontWeight(.semibold).lineLimit(1).minimumScaleFactor(0.85)
                     }
                 }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
-                .help("Quality and frame rate")
+                .help("Quality, resolution and frame rate" + (s.maxFPS.map { ": up to \($0) fps" } ?? ""))
             }
             Menu { themeItems } label: {
                 settingRow("Theme") { Text(theme.name).fontWeight(.semibold) }
@@ -293,12 +297,20 @@ struct LauncherView: View, Equatable {
         Button { actions.toggleMute() } label: { checked(s.muted, "Mute on This Mac") }
     }
 
-    /// Quality, then the frame rate, as one menu: the sidebar's row and the hidden sidebar's capsule.
+    /// Quality, the resolution and the frame rate, as one menu: the sidebar's row and the hidden sidebar's
+    /// capsule. Each the other Mac's, for every device, as an iPad's Settings panel sets them.
     @ViewBuilder private func qualityItems(_ bitrate: Int) -> some View {
         let s = page.settings
         Section("Quality") {
             ForEach(s.qualities, id: \.bitrate) { q in
                 Button { actions.setQuality(q.bitrate) } label: { checked(q.bitrate == bitrate, "\(q.name) — \(q.bitrate / 1_000_000) Mbps") }
+            }
+        }
+        if let scale = s.captureScale {
+            Section("Resolution") {
+                ForEach(s.scaleChoices, id: \.self) { c in
+                    Button { actions.setCaptureScale(c) } label: { checked(c == scale, Self.scaleName(c)) }
+                }
             }
         }
         if let fps = s.maxFPS {
@@ -314,6 +326,23 @@ struct LauncherView: View, Equatable {
     @ViewBuilder private var themeItems: some View {
         ForEach(LauncherTheme.all) { t in
             Button { themeID = t.id.rawValue } label: { checked(t.id == theme.id, t.name) }
+        }
+    }
+
+    /// The sidebar's Quality row: "Balanced · Retina" (the frame rate too only before the resolution is
+    /// known: all three do not fit the sidebar; the menu and the tooltip have them).
+    private func qualitySummary(_ bitrate: Int) -> String {
+        let s = page.settings
+        let second = s.captureScale.map(Self.scaleName) ?? s.maxFPS.map { "\($0)" }
+        return ([qualityName(bitrate)] + [second].compactMap { $0 }).joined(separator: " · ")
+    }
+
+    /// Retina for 2×, Standard for 1× (the iPad's names); another scale a Mac holds, by its number.
+    static func scaleName(_ scale: Double) -> String {
+        switch scale {
+        case 2: "Retina"
+        case 1: "Standard"
+        default: "\(scale.formatted(.number.precision(.fractionLength(0...2))))×"
         }
     }
 
@@ -427,7 +456,8 @@ struct LauncherView: View, Equatable {
             if let bitrate = s.bitrate {
                 Menu { qualityItems(bitrate) } label: { capsuleIcon("chart.bar", on: false) }
                     .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-                    .help("Quality: \(qualityName(bitrate))" + (s.maxFPS.map { ", up to \($0) fps" } ?? ""))
+                    .help("Quality: \(qualityName(bitrate))" + (s.captureScale.map { ", \(Self.scaleName($0))" } ?? "")
+                          + (s.maxFPS.map { ", up to \($0) fps" } ?? ""))
             }
             let hearing = s.sendAudio == true && !s.muted
             Menu { soundItems } label: { capsuleIcon(hearing ? "speaker.wave.2" : "speaker.slash", on: hearing) }
