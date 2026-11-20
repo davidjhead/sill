@@ -155,6 +155,55 @@ final class Launcher: NSObject, NSWindowDelegate {
                                    appOrder: memory.appOrder)
     }
 
+    // MARK: The menu bar menu's Favourites and Recent (StatusMenu)
+
+    /// The favourites as menu items, in the order added, each opening its app as the launcher does (its
+    /// windows on the other Mac, else a launch). Adding or removing one is the launcher's right-click.
+    func favouriteMenuItems() -> [NSMenuItem] {
+        let model = LauncherModel.make(input)
+        guard !model.favourites.isEmpty else {
+            return [Self.note("No favourites yet: right-click an app in the launcher")]
+        }
+        return model.favourites.map { appItem($0) }
+    }
+
+    /// Recent as menu items: the apps used and the Desktops opened from here, latest first, whichever
+    /// order the launcher's All Apps shows.
+    func recentMenuItems() -> [NSMenuItem] {
+        var recent = input
+        recent.appOrder = .recent
+        let items = LauncherModel.make(recent).recent
+        guard !items.isEmpty else { return [Self.note("Nothing opened from here yet")] }
+        return items.map { item in
+            switch item {
+            case .app(let a): return appItem(a)
+            case .desktop(let d):
+                let menuItem = ClosureItem(title: d.name == "Desktop" ? "Desktop" : "Desktop — \(d.name)") { [weak self] in
+                    self?.actions.open(.desktop(d.source))
+                }
+                menuItem.image = NSImage(systemSymbolName: "menubar.dock.rectangle", accessibilityDescription: nil)
+                menuItem.state = d.isOpen ? .on : .off
+                return menuItem
+            }
+        }
+    }
+
+    private func appItem(_ a: LauncherModel.App) -> NSMenuItem {
+        let item = ClosureItem(title: a.name) { [weak self] in self?.actions.open(.app(a.bundleID)) }
+        if let icon = app.client.icons[a.bundleID]?.copy() as? NSImage {
+            icon.size = NSSize(width: 16, height: 16)
+            item.image = icon
+        }
+        item.state = a.running ? .on : .off
+        return item
+    }
+
+    private static func note(_ text: String) -> NSMenuItem {
+        let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
+    }
+
     #if DEBUG
     var windowForTest: NSWindow? { window }
     var actionsForTest: LauncherActions { actions }

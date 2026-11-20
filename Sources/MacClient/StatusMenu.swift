@@ -122,9 +122,18 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             }
         }
         if client.windows.isEmpty { menu.addItem(note("No windows on \(client.macName)")) }
+        menu.addItem(.separator())
+        // The launcher's Favourites and Recent, a list each (an app opens as the launcher opens it).
+        menu.addItem(submenu("Favourites", app.launcher.favouriteMenuItems()))
+        menu.addItem(submenu("Recent", app.launcher.recentMenuItems()))
         var apps: [NSMenuItem] = []
         for a in client.apps {
-            let item = action(a.name) { [weak self] in self?.client.launch(bundleID: a.bundleID) }
+            // Its windows there if it runs, else a launch (StreamWindows.openApp): a launch alone brought
+            // a running app forward with no new window, and nothing streamed.
+            let item = action(a.name) { [weak self] in
+                LauncherMemory.shared.used(a.bundleID)
+                self?.app.windows.openApp(a.bundleID)
+            }
             item.image = icon(client.icons[a.bundleID])
             apps.append(item)
         }

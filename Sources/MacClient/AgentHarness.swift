@@ -26,6 +26,7 @@ import StreamProtocol
 ///   snap <path> [launcher|key|all]
 ///   wait <what> [seconds] connected | apps | windows | launcher | stream (default 10 s)
 ///   dockicon <path>       the Desktop's Dock icon as a PNG
+///   statusmenu favourites|recent <title>   an item of the menu bar menu's Favourites or Recent chosen
 ///   fakemacs              sample Mac rows for the welcome page and the switcher
 ///   quit
 enum AgentHarness {
@@ -196,7 +197,16 @@ enum AgentHarness {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: poll)
             }
             poll()
-        case "fakemacs":
+        case "statusmenu":
+            // statusmenu favourites|recent <title>: the menu bar menu's item chosen (a harness run has no
+            // status item, so its submenus are built as the menu builds them).
+            guard words.count >= 3 else { return fail("statusmenu favourites|recent <title>") }
+            let items = words[1] == "recent" ? app.launcher.recentMenuItems() : app.launcher.favouriteMenuItems()
+            let title = words[2...].joined(separator: " ")
+            guard let item = items.first(where: { $0.title == title }), let action = item.action else { return fail("no item “\(title)”") }
+            NSApp.sendAction(action, to: item.target, from: item)
+            settle { ok() }
+
             // Sample rows for the welcome page and the switcher (the harness never browses): a wired Mac,
             // one on Wi-Fi, a saved one away from home and one not paired. Picking one dials nothing real.
             app.client.macs = [
@@ -268,6 +278,8 @@ enum AgentHarness {
             ],
             "streamWindows": streams,
             "dock": app.windows.dock.planned,
+            "menuFavourites": app.launcher.favouriteMenuItems().map(\.title),
+            "menuRecent": app.launcher.recentMenuItems().map(\.title),
             "visibleWindows": NSApp.windows.filter(\.isVisible).map { $0.title.isEmpty ? String(describing: type(of: $0)) : $0.title },
             "allWindows": NSApp.windows.map { "\(type(of: $0)) visible=\($0.isVisible) level=\($0.level.rawValue) \(Int($0.frame.width))x\(Int($0.frame.height)) from \(Bundle(for: type(of: $0)).bundleURL.lastPathComponent)" },
             "firstResponder": app.launcher.windowForTest.map { String(describing: type(of: $0.firstResponder as Any)) } ?? "",

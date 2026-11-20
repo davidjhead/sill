@@ -5,6 +5,9 @@ wait apps 30
 rightclick 853 326
 choose Add to Favourites
 expect launcher.favourites contains Calculator
+# The menu bar menu's Favourites lists it, and Recent says nothing is opened yet
+expect menuFavourites.0 == Calculator
+expect menuRecent.0 == Nothing opened from here yet
 # Recent: empty, and the favourite still there (the shelf moved All Apps down: the switch is at 225)
 click 867 225
 expect launcher.appOrder == recent
@@ -25,6 +28,12 @@ wait stream 15
 launcher show
 expect launcher.recent.0 == Desktop
 expect launcher.recent.1 == Chess
+# The menu bar menu's Recent: the same, latest first, whichever order All Apps shows
+expect menuRecent.0 == Desktop
+expect menuRecent.1 == Chess
+# Its Favourites opens the app (the test host logs the launch)
+statusmenu favourites Calculator
+expect launcher.recent.0 == Calculator
 expect launcher.favourites contains Calculator
 snap recent-filled.png
 # Back to A to Z: every app, the favourite still there
