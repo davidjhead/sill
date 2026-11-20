@@ -42,6 +42,8 @@ struct LauncherModel: Equatable {
         var name: String
         var running: Bool
         var isFavourite = false
+        /// One of its windows is open here as a window of this Mac (the launcher's green dot).
+        var openHere = false
     }
 
     /// How All Apps is sorted.
@@ -179,15 +181,17 @@ struct LauncherModel: Equatable {
 
     private static func apps(_ input: Input) -> [App] {
         let running = Set(input.windows.map(\.bundleID))
+        let openHere = Set(input.windows.filter { input.open.contains(.window($0.id)) }.map(\.bundleID))
         let favourite = Set(input.favourites)
         var seen = Set<String>()
         var apps: [App] = []
         for a in input.apps where seen.insert(a.bundleID).inserted {
             apps.append(App(bundleID: a.bundleID, name: a.name, running: running.contains(a.bundleID),
-                            isFavourite: favourite.contains(a.bundleID)))
+                            isFavourite: favourite.contains(a.bundleID), openHere: openHere.contains(a.bundleID)))
         }
         for w in input.windows where seen.insert(w.bundleID).inserted {
-            apps.append(App(bundleID: w.bundleID, name: w.appName, running: true, isFavourite: favourite.contains(w.bundleID)))
+            apps.append(App(bundleID: w.bundleID, name: w.appName, running: true, isFavourite: favourite.contains(w.bundleID),
+                            openHere: openHere.contains(w.bundleID)))
         }
         let byName: (App, App) -> Bool = {
             let order = $0.name.localizedStandardCompare($1.name)

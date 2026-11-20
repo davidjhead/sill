@@ -154,6 +154,17 @@ do {
     check(LauncherModel.make(i).recent.isEmpty, "no Recent list in the A to Z order")
 }
 
+// An app with a window open here is marked (the launcher's green dot); one only running there is not.
+do {
+    var i = base
+    i.open = [.window(21)]   // Xcode's window open here; Safari's windows only on the other Mac
+    let m = LauncherModel.make(i)
+    let xcode = m.apps.first { $0.name == "Xcode" }, safariApp = m.apps.first { $0.name == "Safari" }
+    check(xcode?.openHere == true && xcode?.running == true, "Xcode, its window open here: open here")
+    check(safariApp?.openHere == false && safariApp?.running == true, "Safari, only on the other Mac: running, not open here")
+    check(m.apps.first { $0.name == "Notes" }?.openHere == false, "an app with no window: not open here")
+}
+
 // Opening an app chosen here: its own titled windows that are not strips, in the list's order; none
 // for an app with no window there (it is launched instead).
 do {

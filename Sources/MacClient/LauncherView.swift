@@ -219,7 +219,7 @@ struct LauncherView: View, Equatable {
             Image(systemName: symbol).font(.system(size: 13)).frame(width: 16)
             Text(title).font(.system(size: 13)).lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 0)
-            if open { Circle().fill(theme.ink.opacity(0.85)).frame(width: 5, height: 5) }
+            if open { Circle().fill(theme.ok).frame(width: 6, height: 6) }   // open here: the Connected dot's green
         }
         .foregroundStyle(theme.ink.opacity(selected ? 1 : 0.88))
         .padding(.horizontal, 9).frame(height: 30)
@@ -569,7 +569,7 @@ struct LauncherView: View, Equatable {
                                 appIcon(a.bundleID, name: a.name, size: 52)
                                 Text(a.name).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.92))
                                     .lineLimit(1).truncationMode(.tail).frame(width: 72)
-                                Circle().fill(theme.ink.opacity(a.running ? 1 : 0)).frame(width: 4, height: 4)
+                                runningDot(a)
                             }
                         }
                         .buttonStyle(LauncherTileStyle(padding: 2))
@@ -636,7 +636,7 @@ struct LauncherView: View, Equatable {
                     .frame(width: 52, height: 52)
                     .shadow(color: .black.opacity(0.25), radius: 5, y: 3)
                 Text(d.name).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.92)).lineLimit(1).truncationMode(.tail)
-                Circle().fill(theme.ink.opacity(d.isOpen ? 0.85 : 0)).frame(width: 4, height: 4)
+                Circle().fill(d.isOpen ? theme.ok : .clear).frame(width: 5, height: 5)
             }
             .frame(maxWidth: .infinity)
         }
@@ -683,12 +683,19 @@ struct LauncherView: View, Equatable {
             VStack(spacing: 6) {
                 appIcon(a.bundleID, name: a.name, size: 52)
                 Text(a.name).font(.system(size: 11)).foregroundStyle(theme.ink.opacity(0.92)).lineLimit(1).truncationMode(.tail)
-                Circle().fill(theme.ink.opacity(a.running ? 0.85 : 0)).frame(width: 4, height: 4)
+                runningDot(a)
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(LauncherTileStyle())
         .modifier(AppMenu(app: a, actions: actions))
+    }
+
+    /// Under an app's name: green (the Connected dot's) when a window of it is open here, a plain dot
+    /// when it only runs on the other Mac, none when it does not run there.
+    private func runningDot(_ a: LauncherModel.App) -> some View {
+        Circle().fill(a.openHere ? theme.ok : theme.ink.opacity(a.running ? 0.85 : 0))
+            .frame(width: a.openHere ? 5 : 4, height: a.openHere ? 5 : 4)
     }
 
     @ViewBuilder private func appIcon(_ bundleID: String, name: String, size: CGFloat) -> some View {
@@ -772,7 +779,7 @@ private struct AppMenu: ViewModifier {
                     app.isFavourite ? Label("Remove from Favourites", systemImage: "star.slash") : Label("Add to Favourites", systemImage: "star")
                 }
             }
-            .accessibilityLabel([app.name, app.running ? "running" : nil, app.isFavourite ? "favourite" : nil].compactMap { $0 }.joined(separator: ", "))
+            .accessibilityLabel([app.name, app.openHere ? "open here" : app.running ? "running" : nil, app.isFavourite ? "favourite" : nil].compactMap { $0 }.joined(separator: ", "))
             .accessibilityAction(named: app.isFavourite ? "Remove from Favourites" : "Add to Favourites") { actions.toggleFavourite(app.bundleID) }
     }
 }
