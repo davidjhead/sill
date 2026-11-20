@@ -467,11 +467,19 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         // The Dock icon asks as it starts and as it becomes active: one answer.
         if let last = lastDockLaunch[app], Date().timeIntervalSince(last) < 3 { return }
         lastDockLaunch[app] = Date()
-        let theirs = client.windows.filter { $0.bundleID == app && !$0.title.isEmpty && $0.width >= 80 && $0.height >= 150 }
-        windowLog("dock: \(app) asked for from the Dock: \(theirs.isEmpty ? "launching it" : "\(theirs.count) window(s)")")
-        if theirs.isEmpty { client.launch(bundleID: app); return }
+        windowLog("dock: \(app) asked for from the Dock")
+        openApp(app)
+    }
+
+    /// An app chosen here (the launcher, a kept Dock icon): its windows on the other Mac open here, the
+    /// front one focused, when it has any (LauncherModel.openableWindows); with none, it is launched
+    /// there and its first window streams here.
+    func openApp(_ bundleID: String) {
+        let theirs = LauncherModel.openableWindows(of: bundleID, in: client.windows)
+        windowLog("open app \(bundleID): \(theirs.isEmpty ? "launching it" : "\(theirs.count) window(s) open there")")
+        guard let front = theirs.first else { client.launch(bundleID: bundleID); return }
         for w in theirs.dropFirst().reversed() { open(.window(w.id), focus: false) }
-        open(.window(theirs[0].id), focus: true)
+        open(.window(front.id), focus: true)
     }
 
     func closeAll() {

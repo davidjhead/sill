@@ -101,7 +101,7 @@ final class Launcher: NSObject, NSWindowDelegate {
                 case .window(let id): self.app.windows.open(.window(id))
                 case .app(let bundleID):
                     LauncherMemory.shared.used(bundleID)
-                    self.app.client.launch(bundleID: bundleID)
+                    self.app.windows.openApp(bundleID)   // its windows if it runs there, else a launch
                 }
             },
             close: { [weak self] in self?.hide() },

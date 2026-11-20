@@ -154,6 +154,21 @@ do {
     check(LauncherModel.make(i).recent.isEmpty, "no Recent list in the A to Z order")
 }
 
+// Opening an app chosen here: its own titled windows that are not strips, in the list's order; none
+// for an app with no window there (it is launched instead).
+do {
+    let strip = WindowInfo(id: 40, title: "", appName: "Safari", bundleID: "com.apple.Safari", width: 1512, height: 115)
+    let tiny = WindowInfo(id: 41, title: "Tiny", appName: "Safari", bundleID: "com.apple.Safari", width: 60, height: 400)
+    let short = WindowInfo(id: 42, title: "Short", appName: "Safari", bundleID: "com.apple.Safari", width: 400, height: 140)
+    let list = [xcode, strip, safari, tiny, short, safari2]
+    check(LauncherModel.openableWindows(of: "com.apple.Safari", in: list).map(\.id) == [11],
+          "only titled windows of the app, not strips or slivers: \(LauncherModel.openableWindows(of: "com.apple.Safari", in: list).map(\.id))")
+    check(LauncherModel.openableWindows(of: "com.apple.dt.Xcode", in: [safari, xcode]).map(\.id) == [21], "another app's windows are not its")
+    check(LauncherModel.openableWindows(of: "com.apple.Notes", in: list).isEmpty, "an app with none: launched")
+    let two = WindowInfo(id: 13, title: "Second", appName: "Safari", bundleID: "com.apple.Safari", width: 800, height: 600)
+    check(LauncherModel.openableWindows(of: "com.apple.Safari", in: [two, safari]).map(\.id) == [13, 11], "front to back, as listed")
+}
+
 // The ranks themselves.
 check(LauncherModel.rank(["Visual Studio Code"], "stu") == 0, "a word's start ranks 0")
 check(LauncherModel.rank(["Visual Studio Code"], "udi") == 1, "inside a word ranks 1")

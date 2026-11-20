@@ -137,6 +137,14 @@ struct LauncherModel: Equatable {
         }.map(\.item)
     }
 
+    /// An app's windows on the other Mac that opening it from here shows, front to back as listed: titled,
+    /// and not one of its strips (a browser's full-screen bar, 115 points tall). An app with any is
+    /// running there, and asking it to launch only brings it forward with no new window, so the other
+    /// Mac's Sill (which streams a launched app's new window) streamed nothing: these open instead.
+    static func openableWindows(of bundleID: String, in windows: [WindowInfo]) -> [WindowInfo] {
+        windows.filter { $0.bundleID == bundleID && !$0.title.isEmpty && $0.width >= 80 && $0.height >= 150 }
+    }
+
     /// The favourites after a right-click's Add or Remove: added at the end, removed wherever it is.
     static func toggled(_ favourites: [String], _ bundleID: String) -> [String] {
         favourites.contains(bundleID) ? favourites.filter { $0 != bundleID } : favourites + [bundleID]
