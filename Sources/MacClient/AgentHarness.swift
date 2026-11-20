@@ -99,6 +99,10 @@ enum AgentHarness {
             // x y in points from the window's top-left, as `snap` draws it.
             guard words.count >= 3, let x = Double(words[1]), let y = Double(words[2]) else { return fail("\(words[0]) <x> <y> [window]") }
             guard let w = window(words.count > 3 ? words[3] : "launcher", app) else { return fail("no such window") }
+            // The layout brought up to date first: a click right after a change (a favourite added, a
+            // pane chosen) would land where things were before SwiftUI laid them out again.
+            w.contentView?.layoutSubtreeIfNeeded()
+            w.displayIfNeeded()
             let at = NSPoint(x: x, y: w.frame.height - y)
             mouse(w, .mouseMoved, at)
             if words[0] == "hover" { return settle { ok() } }
@@ -137,7 +141,12 @@ enum AgentHarness {
             openMenu = nil
             menu.cancelTracking()
             DispatchQueue.main.async { menu.performActionForItem(at: i) }
-            settle { ok() }
+            // The item's action runs once the menu has closed, and what it changes is laid out after:
+            // longer than a click's settle.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                NSApp.windows.forEach { $0.contentView?.layoutSubtreeIfNeeded() }
+                ok()
+            }
         case "scroll":
             // scroll <x> <y> <dy>: dy points down (positive) or up, as a trackpad's scroll.
             guard words.count >= 4, let x = Double(words[1]), let y = Double(words[2]), let dy = Double(words[3]),
