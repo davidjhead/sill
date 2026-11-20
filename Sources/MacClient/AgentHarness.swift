@@ -24,7 +24,8 @@ import StreamProtocol
 ///   key <keys>            a key or a shortcut: esc, return, tab, ctrl-cmd-s, cmd-w…
 ///   launcher show|hide
 ///   snap <path> [launcher|key|all]
-///   wait <what> [seconds] connected | apps | windows | launcher | stream (default 10 s)
+///   wait <what> [seconds] connected | apps | windows | launcher | stream | sendaudio (the other Mac's
+///                         Send Audio on) | sound (its sound decoded here) (default 10 s)
 ///   dockicon <path>       the Desktop's Dock icon as a PNG
 ///   statusmenu favourites|recent <title>   an item of the menu bar menu's Favourites or Recent chosen
 ///   fakemacs              sample Mac rows for the welcome page and the switcher
@@ -244,6 +245,8 @@ enum AgentHarness {
         case "windows": !app.client.windows.isEmpty
         case "launcher": app.launcher.isShown
         case "stream": app.client.active != .none
+        case "sendaudio": app.client.settings.displayed?.sendAudio == true
+        case "sound": app.audio.framesDecoded > 0
         default: false
         }
     }
@@ -265,6 +268,8 @@ enum AgentHarness {
             "locked": client.lockWhy.map { "\($0)" } ?? "",
             "macID": client.session?.macID ?? "",
             "active": "\(client.active)",
+            "sound": ["sendAudio": client.settings.displayed?.sendAudio.map { $0 ? "on" : "off" } ?? "none",
+                      "muted": AudioPlayer.muted, "frames": app.audio.framesDecoded],
             "counts": ["apps": client.apps.count, "windows": client.windows.count, "icons": client.icons.count],
             "launcher": [
                 "shown": app.launcher.isShown,

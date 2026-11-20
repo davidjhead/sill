@@ -609,9 +609,11 @@ Scripts/viewer_agent.py run /tmp/flows Scripts/viewer-flows/*.flow   # the launc
 - **Keys** go to the other Mac while a window has the keyboard, ⌘W and ⌘Q included; ⌃⌥⌘⎋ gives the
   keyboard back. ⌘Tab, ⌘Space and the other shortcuts macOS keeps go across only with Capture System
   Shortcuts (Accessibility for Sill Viewer).
-- **Clipboard, sound and files**: Share Clipboard and Play Sound in the icon's menu (sound needs the
-  host's audio recording permission once); drop files on a window, or drag them out of one (onto
-  the Trash too).
+- **Clipboard, sound and files**: Share Clipboard in the icon's menu; Send Audio (the other Mac's, for
+  every device, as an iPhone's Settings panel sets it) and Mute on This Mac in the icon's menu and the
+  launcher's settings (the sound is kind 43, the streamed window's app or the Desktop's, and needs the
+  host's audio recording permission once); drop files on a window, or drag them out of one (onto the
+  Trash too).
 - The device key is in the login keychain (`me.saffer.sill.device-key`); saved Macs are in
   `defaults read me.saffer.sill.client`. On the other Mac this Mac is a device in Settings › Devices.
 

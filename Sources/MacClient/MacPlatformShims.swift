@@ -2,9 +2,9 @@ import Foundation
 import AppKit
 import StreamProtocol
 
-// Stage 1: the Mac client plays no sound yet. These are the few members the shared StreamClient calls on
-// the iOS app's AudioOutput (AVAudioSession, UIKit), as no-ops, until the Mac player (AudioPlayer.swift)
-// is moved to kind 43 (docs/mac-client-prd.md, 1.3).
+// The few members the shared StreamClient calls on the iOS app's AudioOutput (AVAudioSession, UIKit), as
+// no-ops: the Mac's sound (kind 43) goes to Sill Viewer's own player instead (AudioPlayer.swift, through
+// `onAudio`; docs/mac-client-prd.md, 1.3).
 final class AudioOutput {
     var onRouteMuted: (() -> Void)?
     init(refresh: Double) {}
@@ -20,8 +20,11 @@ final class AudioOutput {
 
 extension StreamClient {
     static let soundMutedKey = "Sill.soundMuted"
-    var macHasSound: Bool { false }
+    /// The other Mac has sound: its settings carry Send Audio, on or off (as the iPhone app reads it).
+    var macHasSound: Bool { settings.displayed?.sendAudio != nil }
     func frameForSound(_ header: StreamHeader) {}
+    /// A kind 43 on the session's connection, to Sill Viewer's player as it came. Network queue.
+    func receiveAudio(_ header: StreamHeader, _ data: Data) { onAudio?(data) }
 }
 
 extension StreamClient {

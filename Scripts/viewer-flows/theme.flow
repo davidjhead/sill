@@ -2,14 +2,14 @@
 # favourites left as they were (the runner's rule). Snapshots of each for a look.
 wait apps 30
 expect theme == midnight
-rightclick 853 326
+rightclick 273 430
 choose Add to Favourites
 snap theme-midnight.png
-click 110 539
+click 110 513
 choose Graphite
 expect theme == graphite
 snap theme-graphite.png
-click 110 539
+click 110 513
 choose Daylight
 expect theme == daylight
 snap theme-daylight.png
@@ -18,6 +18,6 @@ expect launcher.favourites contains Calculator
 key esc
 launcher show
 expect theme == daylight
-click 110 539
+click 110 513
 choose Midnight
 expect theme == midnight

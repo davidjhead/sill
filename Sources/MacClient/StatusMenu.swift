@@ -49,7 +49,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
                 allow.toolTip = ClipboardPolicy.Copy.viewerAccessHint
                 menu.addItem(allow)
             }
-            menu.addItem(playSoundItem())
+            for item in soundItems() { menu.addItem(item) }
             if let key = NSApp.orderedWindows.first(where: { $0 is StreamWindow && $0.styleMask.contains(.fullScreen) }) {
                 menu.addItem(action("Exit Full Screen") { key.toggleFullScreen(nil) })
             }
@@ -214,16 +214,20 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         return item
     }
 
-    private func playSoundItem() -> NSMenuItem {
-        let item = toggle("Play Sound", AudioPlayer.enabled) { [app] in
-            AudioPlayer.enabled.toggle()
-            if !AudioPlayer.enabled { app.audio.stop() }
-            app.windows.requestSideStreams()   // the host taps, or gives the apps their sound back
+    /// Send Audio (the other Mac's, for every device, a beta) and Mute on This Mac (this Mac's own), as the
+    /// launcher has them. A Mac without sound: Send Audio greyed out, saying to update its Sill.
+    private func soundItems() -> [NSMenuItem] {
+        let send = client.settings.displayed?.sendAudio
+        let sendItem = toggle("Send Audio (Beta)", send == true) { [client] in
+            client.changeSettings(HostSettingsChange(sendAudio: !(send ?? false)))
         }
-        item.toolTip = client.hostAudio ? "The sound of the apps open here plays on this Mac and is silenced on \(client.macName)."
-                                        : "\(client.macName)’s Sill does not send sound yet."
-        item.isEnabled = client.hostAudio
-        return item
+        sendItem.isEnabled = send != nil
+        sendItem.toolTip = send == nil ? "Update Sill on \(client.macName) to hear its sound here."
+                                       : "\(client.macName) sends the sound of what streams, to every device."
+        guard send != nil else { return [sendItem] }
+        let mute = toggle("Mute on This Mac", AudioPlayer.muted) { [app] in app.toggleMute() }
+        mute.toolTip = "Silence \(client.macName)’s sound here alone; it keeps sending."
+        return [sendItem, mute]
     }
 
     /// Launch at login, as Sill.app has it (SMAppService.mainApp): the system's status is the truth, read

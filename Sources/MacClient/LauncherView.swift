@@ -13,8 +13,10 @@ struct LauncherPage: Equatable {
         var bitrate: Int?                         // nil: the settings are not read yet
         var maxFPS: Int?
         var fpsChoices: [Int] = SettingsChoices.maxFPS
-        var soundOn = false
-        var soundAvailable = false
+        /// The other Mac's Send Audio, for every device: nil for a Mac without sound (or no settings yet).
+        var sendAudio: Bool?
+        /// Mute on This Mac: this Mac's own, never sent.
+        var muted = false
         var captureOn = false
     }
 
@@ -47,7 +49,8 @@ struct LauncherActions {
     var setAppOrder: (LauncherModel.AppOrder) -> Void = { _ in }
     var setQuality: (Int) -> Void = { _ in }
     var setMaxFPS: (Int) -> Void = { _ in }
-    var toggleSound: () -> Void = {}
+    var setSendAudio: (Bool) -> Void = { _ in }
+    var toggleMute: () -> Void = {}
     var toggleCapture: () -> Void = {}
     var disconnect: () -> Void = {}
     var switchMac: (String) -> Void = { _ in }   // a MacRow's id
@@ -244,9 +247,20 @@ struct LauncherView: View, Equatable {
             }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
             .help("The launcher's look: Midnight, Graphite or Daylight")
-            settingRow("Sound") { Toggle("", isOn: Binding(get: { s.soundOn }, set: { _ in actions.toggleSound() })) }
-                .disabled(!s.soundAvailable)
-                .help(s.soundAvailable ? "Play the other Mac’s sound here" : "\(page.macName)’s Sill does not send sound yet")
+            // Send Audio, the other Mac's for every device (as an iPhone's Settings panel has it), a beta;
+            // Mute on This Mac under it, this Mac's own, for a Mac with sound whichever way Send Audio is.
+            settingRow("Send Audio", beta: true) {
+                Toggle("", isOn: Binding(get: { s.sendAudio ?? false }, set: { actions.setSendAudio($0) }))
+            }
+            .disabled(s.sendAudio == nil)
+            .help(s.sendAudio == nil ? "Update Sill on \(page.macName) to hear its sound here"
+                                     : "\(page.macName) sends the sound of what streams, to every device")
+            if s.sendAudio != nil {
+                settingRow("Mute on This Mac") {
+                    Toggle("", isOn: Binding(get: { s.muted }, set: { _ in actions.toggleMute() }))
+                }
+                .help("Silence \(page.macName)’s sound here alone; it keeps sending")
+            }
             settingRow("Capture shortcuts") { Toggle("", isOn: Binding(get: { s.captureOn }, set: { _ in actions.toggleCapture() })) }
                 .help("⌘Tab, ⌘Space and the other shortcuts go to the other Mac while its window has the keyboard")
         }
@@ -255,15 +269,28 @@ struct LauncherView: View, Equatable {
         .background(RoundedRectangle(cornerRadius: 12).fill(theme.well))
     }
 
-    private func settingRow<V: View>(_ label: String, @ViewBuilder _ value: () -> V) -> some View {
-        HStack {
+    private func settingRow<V: View>(_ label: String, beta: Bool = false, @ViewBuilder _ value: () -> V) -> some View {
+        HStack(spacing: 5) {
             Text(label).foregroundStyle(theme.ink.opacity(0.75))
+            if beta {
+                Text("BETA").font(.system(size: 8, weight: .bold)).foregroundStyle(theme.ink.opacity(0.6))
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(Capsule().strokeBorder(theme.ink.opacity(0.35)))
+                    .accessibilityLabel("beta")
+            }
             Spacer(minLength: 4)
             value().labelsHidden()
         }
         .font(.system(size: 12))
         .padding(.horizontal, 6).frame(height: 26)
         .contentShape(Rectangle())
+    }
+
+    /// Send Audio and Mute on This Mac, the hidden sidebar's sound menu.
+    @ViewBuilder private var soundItems: some View {
+        let s = page.settings
+        Button { actions.setSendAudio(!(s.sendAudio ?? false)) } label: { checked(s.sendAudio == true, "Send Audio (Beta)") }
+        Button { actions.toggleMute() } label: { checked(s.muted, "Mute on This Mac") }
     }
 
     /// Quality, then the frame rate, as one menu: the sidebar's row and the hidden sidebar's capsule.
@@ -402,9 +429,12 @@ struct LauncherView: View, Equatable {
                     .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                     .help("Quality: \(qualityName(bitrate))" + (s.maxFPS.map { ", up to \($0) fps" } ?? ""))
             }
-            Button(action: actions.toggleSound) { capsuleIcon(s.soundOn ? "speaker.wave.2" : "speaker.slash", on: s.soundOn) }
-                .buttonStyle(.plain).disabled(!s.soundAvailable)
-                .help(s.soundAvailable ? (s.soundOn ? "Sound on" : "Sound off") : "\(page.macName)’s Sill does not send sound yet")
+            let hearing = s.sendAudio == true && !s.muted
+            Menu { soundItems } label: { capsuleIcon(hearing ? "speaker.wave.2" : "speaker.slash", on: hearing) }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                .disabled(s.sendAudio == nil)
+                .help(s.sendAudio == nil ? "Update Sill on \(page.macName) to hear its sound here"
+                      : s.sendAudio == false ? "Send Audio is off" : s.muted ? "Muted on this Mac" : "Sound on")
             Menu { themeItems } label: { capsuleIcon("paintpalette", on: false) }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 .help("Theme: \(theme.name)")

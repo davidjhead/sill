@@ -20,8 +20,8 @@ key ctrl-cmd-s
 expect launcher.sidebarHidden == true
 key ctrl-cmd-s
 expect launcher.sidebarHidden == false
-# A right-click adds an app to the favourites (Calculator: second row, last column, A to Z)
-rightclick 853 326
+# A right-click adds an app to the favourites (Calculator: third row, first column, A to Z, with this Mac's apps)
+rightclick 273 430
 choose Add to Favourites
 expect launcher.favourites contains Calculator
 snap launcher-favourite.png

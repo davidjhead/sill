@@ -109,12 +109,8 @@ final class Launcher: NSObject, NSWindowDelegate {
             setAppOrder: { LauncherMemory.shared.appOrder = $0 },
             setQuality: { [weak self] in self?.app.client.changeSettings(HostSettingsChange(bitrate: $0)) },
             setMaxFPS: { [weak self] in self?.app.client.changeSettings(HostSettingsChange(maxFPS: $0)) },
-            toggleSound: { [weak self] in
-                guard let self else { return }
-                AudioPlayer.enabled.toggle()
-                if !AudioPlayer.enabled { self.app.audio.stop() }
-                self.app.windows.requestSideStreams()   // the host taps, or gives the apps their sound back
-            },
+            setSendAudio: { [weak self] in self?.app.client.changeSettings(HostSettingsChange(sendAudio: $0)) },
+            toggleMute: { [weak self] in self?.app.toggleMute() },
             toggleCapture: { SystemKeyTap.shared.enabled.toggle() },
             disconnect: { [weak self] in self?.app.disconnect() },   // the window stays, on the welcome page
             switchMac: { [weak self] id in
@@ -246,14 +242,14 @@ private struct LiveLauncher: View {
             thumbnails: client.thumbnails,
             settings: LauncherPage.Settings(bitrate: client.settings.displayed?.bitrate,
                                             maxFPS: client.settings.displayed?.maxFPS,
-                                            soundOn: AudioPlayer.enabled, soundAvailable: client.hostAudio,
+                                            sendAudio: client.settings.displayed?.sendAudio, muted: AudioPlayer.muted,
                                             captureOn: SystemKeyTap.shared.enabled),
             locked: client.lockView ? nil : client.lockWhy,
             macs: client.macs.map { LauncherPage.MacRow(id: $0.id, name: $0.name, word: $0.word, current: Launcher.isCurrent($0, client)) },
             showsNearby: client.showsNearbyHint && !client.searchingNearby)
         var actions = launcher.actions
-        let sound = actions.toggleSound, capture = actions.toggleCapture
-        actions.toggleSound = { sound(); ownSwitches += 1 }
+        let mute = actions.toggleMute, capture = actions.toggleCapture
+        actions.toggleMute = { mute(); ownSwitches += 1 }
         actions.toggleCapture = { capture(); ownSwitches += 1 }
         return LauncherView(page: page, actions: actions, liveStatus: liveStatus).equatable()
             .onAppear {

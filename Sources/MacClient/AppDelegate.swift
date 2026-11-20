@@ -18,6 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let audio = AudioPlayer()
     private var subscriptions = Set<AnyCancellable>()
 
+    /// Mute on This Mac (the launcher, the menu bar menu): this Mac's own, remembered, never sent; the
+    /// other Mac keeps sending, as it does to a muted iPhone.
+    func toggleMute() {
+        AudioPlayer.muted.toggle()
+        if AudioPlayer.muted { audio.stop() }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         client.picksDesktopItself = false   // the user's windows to open; the Desktop once, on connecting
         #if DEBUG
@@ -28,7 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !Self.agent { status = StatusMenu(app: self) }
         clipboardSync = ClipboardSync(client: client)
         let audio = self.audio
-        client.onAudio = { if AudioPlayer.enabled { audio.receive($0) } }
+        audio.silent = Self.agent   // an agent's run decodes and counts, and makes no sound here
+        client.onAudio = { if !AudioPlayer.muted { audio.receive($0) } }
         client.$connected.removeDuplicates().sink { [weak self] connected in
             DispatchQueue.main.async { self?.connectedChanged(connected) }
         }.store(in: &subscriptions)

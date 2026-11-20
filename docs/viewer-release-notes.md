@@ -106,7 +106,11 @@ One window for everything the other Mac offers, opened on connecting and by Sill
 - Keys go to the other Mac while its window has the keyboard, ⌘W and ⌘Q included. **⌃⌥⌘⎋** gives the
   keyboard back to this Mac.
 - **Clipboard**: Share Clipboard in the menu bar menu.
-- **Sound** (beta): Play Sound in the menu bar menu or the launcher; off by default.
+- **Sound** (beta): **Send Audio** turns the other Mac's sound on for every device connected to it, as
+  the iPhone's Settings panel does; it is off until turned on there or here. **Mute on This Mac**
+  silences it here alone while the other Mac keeps sending. Both are in the launcher's settings (the
+  speaker icon while the sidebar is hidden) and the menu bar menu. The sound is that of the window in
+  front, or of every app while a Desktop is in front.
 - **Files**: drop files on a window to give them to its app; drag files out of a window onto this Mac
   (the Trash too).
 - **About Sill Viewer** shows the version, build number and commit.

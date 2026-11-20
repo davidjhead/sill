@@ -976,7 +976,7 @@ final class StreamClient: ObservableObject {
     var onSideFrame: ((UInt32, Data, Bool) -> Void)?
     /// The Mac's clipboard, on the main thread (kind 32, once this device has asked).
     var onClipboard: ((Clipboard) -> Void)?
-    /// About 10 ms of the shown apps' sound (kind 33), on the network queue.
+    /// The Mac's sound, each kind 43 payload as it came (Sill Viewer's player), on the network queue.
     var onAudio: ((Data) -> Void)?
     /// The source each window list names, on the network queue as it arrives: before the frames that
     /// follow it on the wire, which the main thread's view of `active` can come after.
@@ -4705,10 +4705,9 @@ final class StreamClient: ObservableObject {
             }
         #endif
         case .audio:
-            // The Mac's sound: a format, or packets (StreamClient+Audio, AudioOutput).
-            #if canImport(UIKit)
+            // The Mac's sound: a format, or packets (StreamClient+Audio, AudioOutput; on a Mac,
+            // MacPlatformShims to Sill Viewer's AudioPlayer).
             receiveAudio(header, data)
-            #endif
         case .dragOffer:
             guard let offer = Wire.decode(DragOffer.self, from: data) else { return }
             DispatchQueue.main.async { self.onDragOffer?(offer) }

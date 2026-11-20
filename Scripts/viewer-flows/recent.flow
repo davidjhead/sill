@@ -1,8 +1,8 @@
 # All Apps' Recent: empty until something is opened from here, then the apps and the Desktop opened, the
 # latest first; the favourites stay whatever the order (one added in A to Z, never opened).
 wait apps 30
-# A favourite in A to Z (Calculator: second row, last column), never opened from here
-rightclick 853 326
+# A favourite in A to Z (Calculator: third row, first column, with this Mac's apps), never opened from here
+rightclick 273 430
 choose Add to Favourites
 expect launcher.favourites contains Calculator
 # The menu bar menu's Favourites lists it, and Recent says nothing is opened yet
