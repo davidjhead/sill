@@ -4,12 +4,12 @@
 wait apps 30
 expect stream.resolution == Retina
 snap resolution-retina.png
-click 110 487
+click 110 461
 choose Standard
 wait standard 5
 expect stream.resolution == Standard
 snap resolution-standard.png
-click 110 487
+click 110 461
 choose Retina
 wait retina 5
 expect stream.resolution == Retina

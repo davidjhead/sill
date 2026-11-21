@@ -5,11 +5,11 @@ expect theme == midnight
 rightclick 273 430
 choose Add to Favourites
 snap theme-midnight.png
-click 110 513
+click 110 487
 choose Graphite
 expect theme == graphite
 snap theme-graphite.png
-click 110 513
+click 110 487
 choose Daylight
 expect theme == daylight
 snap theme-daylight.png
@@ -18,6 +18,6 @@ expect launcher.favourites contains Calculator
 key esc
 launcher show
 expect theme == daylight
-click 110 513
+click 110 487
 choose Midnight
 expect theme == midnight

@@ -59,6 +59,8 @@ final class MainMenu: NSObject {
         // once ⌃⌥⌘⎋ has given the keyboard back to this Mac.
         let full = menu.addItem(withTitle: "Enter/Exit Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         full.keyEquivalentModifierMask = [.control, .command]
+        // A Desktop window's size (DesktopSizing), here for the same reason.
+        for item in DesktopShapeItem.items() { menu.addItem(item) }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit \(name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let item = NSMenuItem(title: name, action: nil, keyEquivalent: "")

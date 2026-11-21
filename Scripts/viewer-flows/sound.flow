@@ -5,20 +5,20 @@ wait apps 30
 expect sound.sendAudio == off
 expect sound.muted == false
 snap sound-off.png
-click 180 539
+click 180 513
 wait sendaudio 5
 expect sound.sendAudio == on
 click 75 242
 wait sound 15
 expect sound.frames > 0
 snap sound-on.png
-click 180 565
+click 180 539
 expect sound.muted == true
 expect sound.frames == 0
 expect sound.sendAudio == on
 wait stream 1
 expect sound.frames == 0
-click 180 565
+click 180 539
 wait sound 10
 expect sound.muted == false
 expect sound.frames > 0

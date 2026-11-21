@@ -115,6 +115,17 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         client.$settings.map { $0.host?.link }.removeDuplicates().sink { [weak self] _ in
             DispatchQueue.main.async { self?.updateToolbars() }
         }.store(in: &subscriptions)
+        // A Desktop window's shape (DesktopSizing): the frame its stream carries, the other Mac's
+        // displays' sizes, and the Keep the Desktop's Shape setting.
+        client.$videoSize.removeDuplicates().sink { [weak self] size in
+            DispatchQueue.main.async { self?.videoSizeChanged(size) }
+        }.store(in: &subscriptions)
+        client.$hostDisplays.removeDuplicates().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.reshapeAll() }
+        }.store(in: &subscriptions)
+        NotificationCenter.default.addObserver(forName: DesktopSizing.changed, object: nil, queue: .main) { [weak self] _ in
+            self?.reshapeAll()
+        }
         // The person at the other Mac took these windows back: they close here (and may be opened again).
         client.onTakenBack = { [weak self] ids in
             guard let self else { return }
@@ -269,7 +280,12 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         }
         let window = StreamWindow(source: source, size: initialSize(source))
         window.delegate = self
-        let toolbar = WindowToolbar(window: window, client: client, desktop: display(of: source) != nil || source == .desktop)
+        window.isDesktop = display(of: source) != nil || source == .desktop
+        window.sizer = { [weak self, weak window] command in
+            guard let self, let window else { return }
+            self.size(window, command)
+        }
+        let toolbar = WindowToolbar(window: window, client: client, desktop: window.isDesktop)
         toolbar.onRefresh = { [weak self] in self?.refreshDesk() }
         toolbar.onLauncher = { [weak self] in self?.onShowLauncher?() }
         window.toolbarController = toolbar
@@ -294,6 +310,7 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         open[source] = window
         router.register(source, window.side.feed)   // the main stream goes here whenever the host streams this
         defer { syncDock(); keep() }
+        applyShape(window, adjust: true)   // a Desktop whose display the other Mac lists: its shape at once
         window.center()
         if let key = NSApp.keyWindow as? StreamWindow, key !== window {
             window.setFrameTopLeftPoint(NSPoint(x: key.frame.minX + 28, y: key.frame.maxY - 28))
@@ -442,6 +459,128 @@ final class StreamWindows: NSObject, NSWindowDelegate {
         windowLog("refresh: asking the other Mac to make its hidden displays again")
         client.send(.rebuildDesk, payload: Data())
     }
+
+    // MARK: A Desktop window's size (DesktopSizing)
+
+    /// The main stream's frame changed size: the Desktop window showing it takes its shape (a new
+    /// display, the other Mac's resolution changed, the Resolution setting). Only while the other Mac
+    /// says the Desktop streams, so an app window's frame is never taken for the Desktop's.
+    private func videoSizeChanged(_ size: CGSize) {
+        guard size.width > 0, size.height > 0, client.active == .desktop,
+              let window = open[local(.desktop)], window.isDesktop, window.desktopFrame != size else { return }
+        windowLog("desktop: \(window.source)'s frame is \(Int(size.width))×\(Int(size.height))")
+        let first = window.desktopFrame == .zero
+        window.desktopFrame = size
+        applyShape(window, adjust: !first)
+        // A new Desktop window opens at Actual Size, or fitted to the screen when that is too big.
+        if first { self.size(window, .actual) }
+    }
+
+    private func reshapeAll() {
+        for window in open.values where window.isDesktop { applyShape(window, adjust: true) }
+    }
+
+    /// The Desktop's proportions: the frame its stream carried, else its display's size as listed.
+    private func desktopShape(_ window: StreamWindow) -> CGSize? {
+        if window.desktopFrame.width > 0 { return window.desktopFrame }
+        if let d = display(of: window.source), d.width > 0, d.height > 0 { return CGSize(width: d.width, height: d.height) }
+        return nil
+    }
+
+    /// The other Mac's Desktop in its points: its display's listed size, else from the frame.
+    private func desktopPoints(_ window: StreamWindow) -> CGSize? {
+        if let d = display(of: window.source), d.width > 0, d.height > 0 { return CGSize(width: d.width, height: d.height) }
+        guard window.desktopFrame.width > 0 else { return nil }
+        return DesktopSizing.points(frame: window.desktopFrame, captureScale: client.settings.displayed?.captureScale)
+    }
+
+    /// Keep the Desktop's Shape on a window: AppKit keeps the picture area's proportions while it is
+    /// resized. `adjust`: the window takes the shape now too, keeping its width (held to the screen),
+    /// never during a resize or in full screen. Off: free resizing again.
+    private func applyShape(_ window: StreamWindow, adjust: Bool) {
+        guard window.isDesktop else { return }
+        guard DesktopSizing.keepsShape, let shape = desktopShape(window) else {
+            window.contentResizeIncrements = NSSize(width: 1, height: 1)   // clears the aspect ratio
+            return
+        }
+        window.contentAspectRatio = shape
+        guard adjust, !window.inLiveResize, !window.styleMask.contains(.fullScreen) else { return }
+        let now = window.contentLayoutRect.size
+        var want = DesktopSizing.keepingWidth(now.width, shape: shape)
+        let room = contentRoom(window)
+        if want.width > room.width || want.height > room.height { want = DesktopSizing.fit(shape: shape, room: room) }
+        guard abs(want.width - now.width) > 0.5 || abs(want.height - now.height) > 0.5 else { return }
+        setContent(window, want, keepTop: true)
+    }
+
+    /// Actual Size or Fit to Screen on a Desktop window.
+    func size(_ window: StreamWindow, _ command: DesktopSizing.Command) {
+        guard window.isDesktop, !window.styleMask.contains(.fullScreen),
+              let shape = desktopShape(window), let points = desktopPoints(window) else { return }
+        let room = contentRoom(window)
+        let content: CGSize
+        switch command {
+        case .actual:
+            let (size, scale) = DesktopSizing.actual(points: points, room: room)
+            content = size
+            windowLog("desktop: actual size \(Int(points.width))×\(Int(points.height)) pt" + (scale < 1 ? ", too big: fitted at \(Int((scale * 100).rounded()))%" : ""))
+        case .fit:
+            content = DesktopSizing.fit(shape: shape, room: room)
+            windowLog("desktop: fit to screen \(Int(content.width))×\(Int(content.height)) pt")
+        }
+        setContent(window, content, keepTop: false)
+    }
+
+    /// The picture area a window can have on its screen: the visible frame less the title bar and toolbar.
+    private func contentRoom(_ window: NSWindow) -> CGSize {
+        let visible = (window.screen ?? NSScreen.main)?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
+        let chrome = window.frame.height - window.contentLayoutRect.height
+        return CGSize(width: visible.width, height: visible.height - chrome)
+    }
+
+    /// The window's picture area set to `content`: its top edge kept (a shape change), or centred where
+    /// it was (Actual Size, Fit to Screen); held inside the screen's visible frame either way.
+    private func setContent(_ window: NSWindow, _ content: CGSize, keepTop: Bool) {
+        let chrome = CGSize(width: window.frame.width - window.contentLayoutRect.width,
+                            height: window.frame.height - window.contentLayoutRect.height)
+        let old = window.frame
+        var frame = NSRect(x: 0, y: 0, width: content.width + chrome.width, height: content.height + chrome.height)
+        frame.origin.x = keepTop ? old.minX : old.midX - frame.width / 2
+        frame.origin.y = keepTop ? old.maxY - frame.height : old.midY - frame.height / 2
+        if let visible = (window.screen ?? NSScreen.main)?.visibleFrame {
+            frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
+            frame.origin.y = min(max(frame.minY, visible.minY), visible.maxY - frame.height)
+        }
+        window.setFrame(frame.integral, display: true, animate: !AppDelegate.agent && window.isVisible)
+    }
+
+    /// The green button and a double-click on the title bar: a Desktop window fits the screen at its
+    /// shape; an app's window zooms as AppKit's does.
+    func windowWillUseStandardFrame(_ window: NSWindow, defaultFrame newFrame: NSRect) -> NSRect {
+        guard let window = window as? StreamWindow, window.isDesktop, let shape = desktopShape(window) else { return newFrame }
+        let content = DesktopSizing.fit(shape: shape, room: contentRoom(window))
+        let chrome = CGSize(width: window.frame.width - window.contentLayoutRect.width,
+                            height: window.frame.height - window.contentLayoutRect.height)
+        var frame = NSRect(x: 0, y: 0, width: content.width + chrome.width, height: content.height + chrome.height)
+        frame.origin.x = newFrame.midX - frame.width / 2
+        frame.origin.y = newFrame.maxY - frame.height
+        return frame
+    }
+
+    #if DEBUG
+    /// The harness: a Desktop window's points, and whether its picture area has the stream's shape
+    /// (within a point), is at Actual Size (or Actual Size fitted to the screen), or fills the screen.
+    func sizingForTest(_ window: StreamWindow) -> (points: CGSize, keptShape: Bool, actualSize: Bool, fitsScreen: Bool)? {
+        guard let shape = desktopShape(window), let points = desktopPoints(window) else { return nil }
+        let c = window.contentLayoutRect.size
+        let kept = abs(c.width * shape.height / shape.width - c.height) <= 1.5
+        let room = contentRoom(window)
+        let actual = DesktopSizing.actual(points: points, room: room).size
+        let fit = DesktopSizing.fit(shape: shape, room: room)
+        let near = { (a: CGSize, b: CGSize) in abs(a.width - b.width) <= 1.5 && abs(a.height - b.height) <= 1.5 }
+        return (points, kept, near(c, actual), near(c, fit))
+    }
+    #endif
 
     /// Full screen hides the toolbar with the menu bar, so the picture has the whole screen.
     func window(_ window: NSWindow, willUseFullScreenPresentationOptions proposed: NSApplication.PresentationOptions = []) -> NSApplication.PresentationOptions {
@@ -823,7 +962,7 @@ final class StreamWindows: NSObject, NSWindowDelegate {
                 ? NSSize(width: 1280, height: 1280 * video.height / video.width)
                 : NSSize(width: 1280, height: 800)
         }
-        let fit = min(1, (room.width - 40) / size.width, (room.height - 40) / size.height)
+        let fit = min(1, (room.width - 40) / size.width, (room.height - 80) / size.height)
         return NSSize(width: (size.width * fit).rounded(), height: (size.height * fit).rounded())
     }
 
@@ -964,6 +1103,13 @@ final class StreamWindow: NSWindow {
     var capturesShortcuts = SystemKeyTap.shared.enabled
     /// Its toolbar, kept as long as the window.
     var toolbarController: WindowToolbar?
+    /// One of the other Mac's Desktops (a display's), sized by DesktopSizing; an app's window is not.
+    var isDesktop = false
+    /// The Desktop's frame in pixels, the last its stream carried while this window showed it (zero
+    /// before), so its shape is kept while another window streams.
+    var desktopFrame: CGSize = .zero
+    /// Actual Size and Fit to Screen (StreamWindows.size).
+    var sizer: ((DesktopSizing.Command) -> Void)?
     let container = DropContainer()
     let placeholder = NSImageView()
     let side = SideView()
@@ -993,5 +1139,17 @@ final class StreamWindow: NSWindow {
         side.autoresizingMask = [.width, .height]
         container.addSubview(side)
         contentView = container
+    }
+
+    // The app menu's and the toolbar's Actual Size and Fit to Screen, through the responder chain to
+    // the key window.
+    @objc func actualSize(_ sender: Any?) { sizer?(.actual) }
+    @objc func fitToScreen(_ sender: Any?) { sizer?(.fit) }
+
+    override func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(actualSize(_:)) || item.action == #selector(fitToScreen(_:)) {
+            return isDesktop && !styleMask.contains(.fullScreen)
+        }
+        return super.validateMenuItem(item)
     }
 }

@@ -11,7 +11,8 @@ import StreamProtocol
 ///   loses it). Lit, with "Keys to <Mac>", while on. A new window starts as the launcher's Capture
 ///   shortcuts switch says, and that switch sets every open window.
 /// - Gestures (a Desktop only): Mission Control, App Exposé, Spaces, Show Desktop, as the menu bar menu.
-/// - Quality: the quality, resolution and frame rate (the other Mac's, for every device).
+/// - Quality: the quality, resolution and frame rate (the other Mac's, for every device), and on a
+///   Desktop, the window's size (DesktopSizing: Actual Size, Fit to Screen, Keep the Desktop's Shape).
 /// - Refresh: the other Mac makes its hidden displays again, where it has them.
 /// - Launcher.
 /// And at the left of them, only while the other Mac says the link can't carry the quality (LinkWarning),
@@ -239,6 +240,15 @@ final class WindowToolbar: NSObject, NSToolbarDelegate, NSMenuDelegate {
             menu.addItem(ToolbarMenuItem("Up to \(f) fps", on: s.maxFPS == f) { [client] in
                 client.changeSettings(HostSettingsChange(maxFPS: f))
             })
+        }
+        if desktop {
+            // This window's size (DesktopSizing): this Mac's own, never sent.
+            menu.addItem(.sectionHeader(title: "Window"))
+            for item in DesktopShapeItem.items() {
+                if item.target == nil { item.target = window }
+                item.keyEquivalent = ""   // shown in the app menu; here a click
+                menu.addItem(item)
+            }
         }
     }
 }

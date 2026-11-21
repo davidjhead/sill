@@ -1,0 +1,38 @@
+# A Desktop window's size (DesktopSizing, option 2): the window adapts to the other Mac's Desktop, never the
+# other way. The synthetic host's Desktop is its 1512 × 949-point test pattern, streamed by the test host's software encoder at 1x (1512 × 948, even sides): taken as 1x points (DesktopSizing.points).
+# A new Desktop window opens at Actual Size (or fitted to this Mac's screen); Keep the Desktop's Shape keeps its
+# picture area at the frame's proportions; off, a window can take any size (bars, as before); Fit to Screen and
+# the green button give the largest window of that shape.
+wait apps 30
+view keep on
+# The launcher's Keep Desktop shape switch, the settings' last row.
+click 180 591
+expect keepDesktopShape == false
+click 180 591
+expect keepDesktopShape == true
+click 75 242
+wait stream 15
+wait desktopshape 15
+expect streamWindows.0.desktop == true
+expect streamWindows.0.frameSize == 1512x948
+expect streamWindows.0.points == 1512x948
+expect streamWindows.0.keptShape == true
+expect streamWindows.0.actualSize == true
+view keep off
+expect keepDesktopShape == false
+view size 900 400
+expect streamWindows.0.content == 900x400
+expect streamWindows.0.keptShape == false
+view keep on
+expect keepDesktopShape == true
+expect streamWindows.0.keptShape == true
+view size 900 400
+view fit
+expect streamWindows.0.keptShape == true
+expect streamWindows.0.fitsScreen == true
+view size 700 500
+view zoom
+expect streamWindows.0.fitsScreen == true
+view actual
+expect streamWindows.0.actualSize == true
+snap desktopsize-actual.png all

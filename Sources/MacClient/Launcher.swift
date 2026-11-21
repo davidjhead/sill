@@ -114,6 +114,7 @@ final class Launcher: NSObject, NSWindowDelegate {
             setSendAudio: { [weak self] in self?.app.client.changeSettings(HostSettingsChange(sendAudio: $0)) },
             toggleMute: { [weak self] in self?.app.toggleMute() },
             toggleCapture: { SystemKeyTap.shared.enabled.toggle() },
+            toggleDesktopShape: { DesktopSizing.keepsShape.toggle() },
             disconnect: { [weak self] in self?.app.disconnect() },   // the window stays, on the welcome page
             switchMac: { [weak self] id in
                 guard let self, let mac = self.app.client.macs.first(where: { $0.id == id }) else { return }
@@ -246,16 +247,20 @@ private struct LiveLauncher: View {
                                             maxFPS: client.settings.displayed?.maxFPS,
                                             captureScale: client.settings.displayed?.captureScale,
                                             sendAudio: client.settings.displayed?.sendAudio, muted: AudioPlayer.muted,
-                                            captureOn: SystemKeyTap.shared.enabled),
+                                            captureOn: SystemKeyTap.shared.enabled,
+                                            keepDesktopShape: DesktopSizing.keepsShape),
             locked: client.lockView ? nil : client.lockWhy,
             macs: client.macs.map { LauncherPage.MacRow(id: $0.id, name: $0.name, word: $0.word, current: Launcher.isCurrent($0, client)) },
             showsNearby: client.showsNearbyHint && !client.searchingNearby,
             linkWarning: LinkWarning.callout(client))
         var actions = launcher.actions
-        let mute = actions.toggleMute, capture = actions.toggleCapture
+        let mute = actions.toggleMute, capture = actions.toggleCapture, shape = actions.toggleDesktopShape
         actions.toggleMute = { mute(); ownSwitches += 1 }
         actions.toggleCapture = { capture(); ownSwitches += 1 }
+        actions.toggleDesktopShape = { shape(); ownSwitches += 1 }
         return LauncherView(page: page, actions: actions, liveStatus: liveStatus).equatable()
+            // The setting changed from a menu: the switch follows.
+            .onReceive(NotificationCenter.default.publisher(for: DesktopSizing.changed)) { _ in ownSwitches += 1 }
             .onAppear {
                 liveStatus.text = page.status
                 launcher.setTitle(page.macName, subtitle: page.status)

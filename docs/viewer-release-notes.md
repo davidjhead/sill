@@ -120,6 +120,14 @@ One window for everything the other Mac offers, opened on connecting and by Sill
   ⌘Tab is this Mac's again, and every key held down on the other Mac is let go. Come back and it
   resumes. A new window starts as the launcher's Capture shortcuts switch says, and that switch sets
   every open window. ⌃⌥⌘⎋ always gives the keyboard back. Needs Accessibility on this Mac. Resizing a window here resizes it on the other Mac (needs Accessibility there).
+- **A Desktop window's size**: the window adapts to the other Mac's Desktop, whose resolution stays as
+  it is. A new Desktop window opens at **Actual Size** (one of the other Mac's points is one of yours)
+  when that fits this screen, else fitted to it. With **Keep Desktop shape** on (the default; in the
+  launcher's settings and the menu bar menu) a Desktop window keeps the other Mac's proportions as you
+  resize it, so there are no black bars; off, it takes any size and the picture is fitted with bars.
+  **Actual Size** and **Fit to Screen** are in a Desktop window's Quality menu and the Sill Viewer menu
+  (⌘0 and ⌥⌘0 there, once ⌃⌥⌘⎋ has given the keyboard back); the green button and a double-click on the
+  title bar fit it to the screen too.
 - The other Mac's app menus appear in this Mac's menu bar while one of its windows is in front.
 - Keys go to the other Mac while its window has the keyboard, ⌘W and ⌘Q included. **⌃⌥⌘⎋** gives the
   keyboard back to this Mac.
@@ -138,7 +146,9 @@ One window for everything the other Mac offers, opened on connecting and by Sill
   Mac restarts its stream at the new size. Only the window in front is resized; a window in the
   background takes its new size when you click into it.
 - Choosing a Sill Viewer window in Mission Control may bring up the launcher instead.
-- A Desktop window shows the whole display scaled to fit; it does not change the other Mac's resolution.
+- A Desktop window never changes the other Mac's resolution: the window adapts to it. Actual Size reads
+  the other Mac's points from the picture's pixels and the Resolution setting, so on a display that
+  macOS runs at 1x but at least 2600 pixels wide (a large 1x monitor) it can come out half size.
 - An app that keeps a fixed or minimum size, or a window in full screen, keeps its own size.
 - The Dock icons are small helper apps Sill Viewer makes in
   `~/Library/Application Support/Sill Viewer/Dock` and signs ad hoc on this Mac; they quit when their

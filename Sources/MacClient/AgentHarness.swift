@@ -26,10 +26,14 @@ import StreamProtocol
 ///   snap <path> [launcher|key|all]
 ///   wait <what> [seconds] connected | apps | windows | launcher | stream | sendaudio (the other Mac's
 ///                         Send Audio on) | sound (its sound decoded here) | standard | retina | notoast (no link toast)
+///                         | desktopshape (a Desktop window has its stream's frame)
 ///                         (its Resolution) (default 10 s)
 ///   dockicon <path>       the Desktop's Dock icon as a PNG
 ///   toolbar keys|launcher|refresh [window]   a stream window's toolbar button
 ///   capture on|off        the launcher's Capture shortcuts switch, for every window
+///   view actual|fit|zoom [window]   a Desktop window's Actual Size, Fit to Screen, or the green button
+///   view keep on|off      Keep the Desktop's Shape (every Desktop window follows)
+///   view size <w> <h> [window]   a stream window's picture area set, as a drag would leave it
 ///   toast press           the link warning's toast in a session window, clicked
 ///   linkwarning behind|clear   the other Mac's link report faked: can't carry Extreme, or keeping up
 ///   statusmenu favourites|recent <title>   an item of the menu bar menu's Favourites or Recent chosen
@@ -230,6 +234,28 @@ enum AgentHarness {
             guard let toast = app.windows.linkToast, toast.superview != nil else { return fail("no toast showing") }
             toast.press()
             settle { ok(state(app)) }
+        case "view":
+            // view actual|fit|zoom|keep on|off|size W H [window]: a Desktop window's size (DesktopSizing).
+            guard words.count >= 2 else { return fail("view actual|fit|zoom|keep on|off|size <w> <h> [window]") }
+            if words[1] == "keep" {
+                DesktopSizing.keepsShape = words.dropFirst(2).first == "on"
+                return settle { ok(state(app)) }
+            }
+            let rest = words[1] == "size" ? 4 : 2
+            let named = words.count > rest ? words[rest...].joined(separator: " ") : nil
+            let target = named.flatMap { n in NSApp.windows.first { $0 is StreamWindow && $0.title == n } }
+                ?? NSApp.orderedWindows.first { $0 is StreamWindow && $0.isVisible }
+            guard let w = target as? StreamWindow else { return fail("no stream window") }
+            switch words[1] {
+            case "actual": w.actualSize(nil)
+            case "fit": w.fitToScreen(nil)
+            case "zoom": w.zoom(nil)
+            case "size":
+                guard words.count >= 4, let width = Double(words[2]), let height = Double(words[3]) else { return fail("view size <w> <h>") }
+                w.setContentSize(NSSize(width: width, height: height))
+            default: return fail("view actual|fit|zoom|keep on|off|size <w> <h>")
+            }
+            settle { ok(state(app)) }
         case "capture":
             // capture on|off: the launcher's Capture shortcuts switch (every open window follows).
             SystemKeyTap.shared.enabled = words.dropFirst().first == "on"
@@ -283,6 +309,7 @@ enum AgentHarness {
         case "stream": app.client.active != .none
         case "sendaudio": app.client.settings.displayed?.sendAudio == true
         case "notoast": app.windows.linkToast?.superview == nil
+        case "desktopshape": NSApp.windows.contains { ($0 as? StreamWindow).map { $0.isDesktop && $0.desktopFrame.width > 0 } ?? false }
         case "sound": app.audio.framesDecoded > 0
         case "standard": app.client.settings.displayed?.captureScale == 1
         case "retina": app.client.settings.displayed?.captureScale == 2
@@ -300,6 +327,16 @@ enum AgentHarness {
                 info["toast"] = app.windows.linkToast.map { $0.superview === w.container } ?? false
                 info["keysTitle"] = w.toolbarController?.keysTitleForTest ?? ""
                 info["toolbar"] = w.toolbar?.items.map(\.itemIdentifier.rawValue) ?? []
+                info["desktop"] = w.isDesktop
+                let content = w.contentLayoutRect.size
+                info["content"] = "\(Int(content.width.rounded()))x\(Int(content.height.rounded()))"
+                info["frameSize"] = "\(Int(w.desktopFrame.width))x\(Int(w.desktopFrame.height))"
+                if w.isDesktop, let sizing = app.windows.sizingForTest(w) {
+                    info["points"] = "\(Int(sizing.points.width))x\(Int(sizing.points.height))"
+                    info["keptShape"] = sizing.keptShape
+                    info["actualSize"] = sizing.actualSize
+                    info["fitsScreen"] = sizing.fitsScreen
+                }
             }
             return info
         }
@@ -331,6 +368,7 @@ enum AgentHarness {
                 "recent": model.recent.map(\.name),
             ],
             "streamWindows": streams,
+            "keepDesktopShape": DesktopSizing.keepsShape,
             "dock": app.windows.dock.planned,
             "menuFavourites": app.launcher.favouriteMenuItems().map(\.title),
             "menuRecent": app.launcher.recentMenuItems().map(\.title),

@@ -38,6 +38,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
             menu.addItem(submenu("Gestures", gestureItems()))
             menu.addItem(captureItem())
+            menu.addItem(desktopShapeItem())
             menu.addItem(shareClipboardItem())
             if ClipboardPolicy.viewerNeedsAccessHelp(access: ClipboardPasteboard.access, switchOn: ClipboardSync.enabled) {
                 let allow = action(ClipboardPolicy.Copy.viewerAccessButton) {
@@ -211,6 +212,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             SystemKeyTap.shared.enabled.toggle()
         }
         item.toolTip = "⌘Tab, ⌘Space and the other shortcuts go to the other Mac while its window has the keyboard. ⌃⌥⌘⎋ gives the keyboard back."
+        return item
+    }
+
+    /// Keep the Desktop's Shape (DesktopSizing), as the launcher has it.
+    private func desktopShapeItem() -> NSMenuItem {
+        let item = toggle(DesktopShapeItem.title, DesktopSizing.keepsShape) { DesktopSizing.keepsShape.toggle() }
+        item.toolTip = "A Desktop window keeps the other Mac’s proportions as you resize it, so there are no black bars."
         return item
     }
 

@@ -21,6 +21,8 @@ struct LauncherPage: Equatable {
         /// Mute on This Mac: this Mac's own, never sent.
         var muted = false
         var captureOn = false
+        /// Keep the Desktop's Shape (DesktopSizing): this Mac's own, never sent.
+        var keepDesktopShape = true
     }
 
     var macName: String
@@ -61,6 +63,7 @@ struct LauncherActions {
     var setSendAudio: (Bool) -> Void = { _ in }
     var toggleMute: () -> Void = {}
     var toggleCapture: () -> Void = {}
+    var toggleDesktopShape: () -> Void = {}
     var disconnect: () -> Void = {}
     var switchMac: (String) -> Void = { _ in }   // a MacRow's id
     var addMac: () -> Void = {}
@@ -272,6 +275,10 @@ struct LauncherView: View, Equatable {
             }
             settingRow("Capture shortcuts") { Toggle("", isOn: Binding(get: { s.captureOn }, set: { _ in actions.toggleCapture() })) }
                 .help("⌘Tab, ⌘Space and the other shortcuts go to the other Mac while its window has the keyboard")
+            settingRow("Keep Desktop shape") {
+                Toggle("", isOn: Binding(get: { s.keepDesktopShape }, set: { _ in actions.toggleDesktopShape() }))
+            }
+            .help("A Desktop window keeps the other Mac’s proportions as you resize it, so there are no black bars")
         }
         .toggleStyle(.switch).controlSize(.mini)
         .padding(6)
